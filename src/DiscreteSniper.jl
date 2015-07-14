@@ -73,6 +73,7 @@ type SniperPOMDP <: MOMDP
     null_obs::Int64
 
     agent::Symbol
+    lvlk::Bool
 
     map::Map
 
@@ -81,7 +82,7 @@ type SniperPOMDP <: MOMDP
     function SniperPOMDP(map::Map; nSnipers::Int64 = 1, nMonitors::Int64 = 1,
                        target = (2,8),
                        target_reward = 0.1, sniper_reward = -1.0, move_reward = -0.01,
-                       agent::Symbol = :resource)
+                       agent::Symbol = :resource, lvlk::Bool=false)
         self = new()
 
         x_size = map.xSize
@@ -113,6 +114,7 @@ type SniperPOMDP <: MOMDP
         self.n_actions = size(action_map, 2)
 
         self.agent = agent # :resource or :sniper
+        self.lvlk = lvlk
 
         return self
     end
@@ -178,8 +180,16 @@ function transition!(d::FODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, 
 end
 
 
-# stochastic
 function transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
+    if pomdp.lvlk
+        lvlk_transition!(d, pomdp, x, y, a)
+    else
+        stochastic_transition!(d, pomdp, x, y, a)
+    end
+end
+
+# stochastic
+function stochastic_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
     interps = d.interps
     invalids = pomdp.invalid_positions
     if in(y, invalids)
@@ -212,11 +222,9 @@ function transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, 
     d
 end
 
-
 # level-k
 # need the aggrogate state
-#=
-function transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
+function lvlk_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
     interps = d.interps
     na = n_actions(pomdp)
     fill!(interps.weights, 0.2) 
@@ -242,7 +250,6 @@ function transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, 
     end
     d
 end
-=#
 
 function move!(p::Vector{Int64}, pomdp::SniperPOMDP, x::Int64, a::Int64)
     sizes = pomdp.sizes

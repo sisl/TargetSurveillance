@@ -1,5 +1,5 @@
 # module for determining line of sight visibility in 2D
-module RayCaster_
+module RayCasters
 
 export isVisible, inBuilding
 export rayIntersectsSeg, segmentsIntersect

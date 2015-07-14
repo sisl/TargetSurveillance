@@ -1,7 +1,7 @@
 using POMDPXFile
 using DiscreteSniper
-using Collada_
-using UrbanMap_
+using Colladas
+using UrbanMaps
 
 
 
