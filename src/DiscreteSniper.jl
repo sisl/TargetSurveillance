@@ -200,7 +200,6 @@ function stochastic_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64,
         temp = pomdp.temp_position
         na = n_actions(pomdp)
         fill!(interps.weights, 0.2) 
-        inside = 0.0
         inside = na
         for i = 1:na
             move!(temp, pomdp, y, i)
@@ -208,6 +207,7 @@ function stochastic_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64,
             interps.indices[i] = yp
             if in(yp, pomdp.invalid_positions) || !inbounds(pomdp.map, temp)
                 interps.weights[i] = 0.0
+                interps.indices[i] = y
                 inside -= 1
             end
         end
