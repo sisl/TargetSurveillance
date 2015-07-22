@@ -63,6 +63,33 @@ function POMDPSimulation(pomdp::POMDP, init_state::Int64, n_steps::Int64;
 end
 
 
+type MOMDPSimulation <: Simulation
+    coordinates::Matrix{Float64}
+    rewards::Vector{Float64}
+    time::Vector{Int64}
+    actions::Vector{Int64}
+    nObs::Int64
+    nKills::Int64
+    nMoves::Int64
+    belief::Matrix{Float64}
+    lastState::Int64
+    lastBelief::Vector{Float64}
+end
+function POMDPSimulation(pomdp::POMDP, init_state::Int64, n_steps::Int64;
+                       n_vars::Int64=6, init_belief::Vector{Float64}=Float64[])
+    n_s = n_states(pomdp)
+    coords = zeros(n_steps, n_vars)
+    belief = zeros(n_steps, n_s)
+    t      = zeros(Int64, n_steps)
+    a      = zeros(Int64, n_steps)
+    r      = zeros(n_steps)
+    obs    = 0
+    kills  = 0
+    moves  = 0
+    return POMDPSimulation(coords, r, t, a, obs, kills, moves, belief, init_state, init_belief)
+end
+
+
 # target and sniper start in same location
 function simulate(policy::Policy, mdp::DiscreteMDP, nSteps::Int, startM::Array{Int64})
     sizes  = mdp.dimSizes 
