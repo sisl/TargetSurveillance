@@ -140,7 +140,6 @@ function create_fully_obs_transition(pomdp::SniperPOMDP)
     return d
 end
 
-
 function create_partially_obs_transition(pomdp::SniperPOMDP)
     na = n_actions(pomdp)
     interps = Interpolants(na)
