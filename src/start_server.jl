@@ -14,7 +14,7 @@ coll = ColladaObjects("../data/maps/demo_map_border2D.dae");
 map = UrbanMap(coll, 10, 10);
 pomdp = SniperPOMDP(map)
 
-filename = "/Users/megorov/Desktop/projects/stanford/publications/conferences/icaart/2016/code/data/policies/resource-1.policy"
+filename = "../data/policies/resource-1.policy"
 
 policy = PolicyFile(filename, :momdp)
 
