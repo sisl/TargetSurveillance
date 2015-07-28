@@ -74,14 +74,18 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
                     println("Starting the game")
                     line = readline(conn)
                     # initialize belief
-                    b = DiscreteBelief(ns)
                     # parse the line here for sp and mp
-                    sp = [1, 10]
-                    mp = [10, 1]
                     mp, sp = parse_results(pomdp, line)
-                    si = p2i(pomdp, sp)
+                    ba = zeros(ns)
+                    if sp == [-1,-1]
+                        si = pomdp.null_obs 
+                        fill!(ba, 1.0/ns)
+                    else
+                        si = p2i(pomdp, sp)
+                        ba[si] = 1.0
+                    end
                     mi = p2i(pomdp, mp)
-                    update_belief!(b, pomdp, mi, 1, si)
+                    println(mi, " ", si, " ", b)
                     # finished initializing
 
                 # update belief and send way point info
@@ -90,13 +94,13 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
                     line = readline(conn)
                     mp, sp = parse_results(pomdp, line)
                     println(mp, " ", sp)
+                    println("Belief: $b")
                     if sp == [-1,-1]
                         si = pomdp.null_obs 
                     else
                         si = p2i(pomdp, sp)
                     end
                     mi = p2i(pomdp, mp)
-                    println("Belief: $b")
                     a = action(policy, b, mi)
                     update_belief!(b, pomdp, mi, a, si)
                     move!(p, pomdp, mi, a)

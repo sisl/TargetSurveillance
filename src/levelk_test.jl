@@ -27,4 +27,4 @@ b = DiscreteBelief(ns)
 
 server = SniperServer(4444)
 
-start(server, pomdp, policy)
+#start(server, pomdp, policy)
