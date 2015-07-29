@@ -21,14 +21,16 @@ type SniperServer <: GameServer
     protocol::Dict{Symbol, String} # desired operation to protocol
 end
 function SniperServer(socket::Int64; delay::Int64=0, protocol=Dict())
+    ending = "\n"
+    @windows_only ending = "\r"*ending
     if isempty(protocol)
-        protocol[:next] = "next\n"
-        protocol[:null] = "NULL\n"
-        protocol[:start_game] = "start\n" 
-        protocol[:end_game] = "end\n"
-        protocol[:kill] = "kill\n"
+        protocol[:next] = "next"*ending
+        protocol[:null] = "NULL"*ending
+        protocol[:start_game] = "start"*ending 
+        protocol[:end_game] = "end"*ending
+        protocol[:kill] = "kill"*ending
     end
-    #@windows_only 
+
     return SniperServer(socket, delay, protocol)
 end
 function serverSocket(server::SniperServer)
@@ -40,15 +42,31 @@ type GameParams
 end
 
 type ClientResults
+    flag::String
     s::String
+    p1::String
+    p2::String
+    pos::Vector{Int64}
+    o::Vector{Int64}
 end
-
+function ClientResults(;flag::String="split")
+    return ClientResults(flag,"","","",[1,1],[1,1])
+end
 function get(r::ClientResults)
     return r.s
 end
-
+function position(r::ClientResults)
+    return r.pos
+end
+function observation(r::ClientResults)
+    return r.o
+end
 function read!(r::ClientResults, conn)
+    #TODO: add positions
     r.s = readline(conn)
+    t = split(r.s, r.flag)
+    r.p1 = split(t[1])
+    r.p2 = split(t[2])
     r
 end
 
@@ -69,6 +87,7 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
     b = DiscreteBelief(ns)
     rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
     params = GameParams(rounders)
+    res = ClientResults()
     while true
         conn = accept(server)
         @async begin
@@ -83,6 +102,7 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
                 # begin the game
                 if line == protocol[:start_game]
                     println("Starting the game")
+                    #read!(res, conn)
                     line = readline(conn)
                     # initialize belief
                     # parse the line here for sp and mp
