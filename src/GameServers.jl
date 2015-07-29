@@ -19,31 +19,40 @@ type SniperServer <: GameServer
     socketNumber::Int64 
     sendDelay::Int64 # in ms
     protocol::Dict{Symbol, String} # desired operation to protocol
-    rounders::Matrix{Float64}
 end
 function SniperServer(socket::Int64; delay::Int64=0, protocol=Dict())
     if isempty(protocol)
         protocol[:next] = "next\n"
-        protocol[:null] = "NULL"
+        protocol[:null] = "NULL\n"
         protocol[:start_game] = "start\n" 
         protocol[:end_game] = "end\n"
         protocol[:kill] = "kill\n"
     end
-    rounders = [[-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
-    return SniperServer(socket, delay, protocol, rounders)
+    #@windows_only 
+    return SniperServer(socket, delay, protocol)
 end
 function serverSocket(server::SniperServer)
     return server.socketNumber
 end
 
-type ServerParams
+type GameParams
     rounders::Matrix{Float64}
 end
 
+type ClientResults
+    s::String
+end
 
-# decision process should be a more general abstract type?
-# can be mdp or pomdp
-# mdp is a suptype of pomdp
+function get(r::ClientResults)
+    return r.s
+end
+
+function read!(r::ClientResults, conn)
+    r.s = readline(conn)
+    r
+end
+
+
 function start(server::SniperServer, pomdp::POMDP, policy::Policy)
     
     protocol = server.protocol
@@ -58,6 +67,8 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
     p = [1, 1]
     ns = length(collect(domain(part_obs_space(pomdp))))
     b = DiscreteBelief(ns)
+    rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
+    params = GameParams(rounders)
     while true
         conn = accept(server)
         @async begin
@@ -85,7 +96,7 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
                         ba[si] = 1.0
                     end
                     mi = p2i(pomdp, mp)
-                    println(mi, " ", si, " ", b)
+                    println(mi, " ", si, " ", b.b)
                     # finished initializing
 
                 # update belief and send way point info
@@ -94,7 +105,7 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
                     line = readline(conn)
                     mp, sp = parse_results(pomdp, line)
                     println(mp, " ", sp)
-                    println("Belief: $b")
+                    println("Belief: $(b.b)")
                     if sp == [-1,-1]
                         si = pomdp.null_obs 
                     else
@@ -128,15 +139,19 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
 end
 
 
+# TODO (max): this needs to be more forgiving to wrong types/values in the input string
 function parse_results(pomdp::POMDP, s::String)
     t = split(s, "split")
     mp = float(split(t[1]))
     nmp = [1,1]
     nsp = [1,1]
     println(t, " ", t[1], " ", t[2])
-    if t[2] == "NULL\n"
+    println("TEST: $(split(t[2]))")
+    if split(t[2])[1] == "NULL"
+        println("RIGHT")
         fill!(nsp,-1)
     else
+        println("WRONG")
         sp = float(split(t[2]))
         nearest_neighbor!(nsp, pomdp, sp)
     end
@@ -159,8 +174,10 @@ function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, p::Vector{Float64})
         idx = p2i(pomdp, pts[:,i])
         if !in(idx, pomdp.invalid_positions) && d < closest && inbounds(pomdp.map, pts[:,i])
             pp[1:end] = pts[1:end,i]
+            closest = d
         end
     end
+    println("Neighbor: $p, $pp")
     pp
 end
 

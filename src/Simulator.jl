@@ -1,7 +1,5 @@
 module Simulator
 
-
-using POMDPs
 using RayCasters
 using DiscreteSniper
 using POMDPToolbox
@@ -68,14 +66,14 @@ type MOMDPSimulation <: Simulation
     rewards::Vector{Float64}
     time::Vector{Int64}
     actions::Vector{Int64}
-    nObs::Int64
-    nKills::Int64
-    nMoves::Int64
+    no::Int64
+    nk::Int64
+    nm::Int64
     belief::Matrix{Float64}
-    lastState::Int64
-    lastBelief::Vector{Float64}
+    lastState::Int64 # fully observable var index
+    lastBelief::Vector{Float64} # belief over partially obs vars
 end
-function POMDPSimulation(pomdp::POMDP, init_state::Int64, n_steps::Int64;
+function MOMDPSimulation(pomdp::POMDP, init_state::Int64, n_steps::Int64;
                        n_vars::Int64=6, init_belief::Vector{Float64}=Float64[])
     n_s = n_states(pomdp)
     coords = zeros(n_steps, n_vars)
@@ -149,67 +147,19 @@ function simulateStep!(sim::MDPSimulation, mdp::DiscreteMDP, step::Int, policy::
     return
 end
 
-#=
-function simulate(policy::PolicyMDP, mdp::MDP, nSteps::Int)
-
-    results = SimulationResults()
-
-end
 
 
+function simulate!(sim::MOMDPSimulation, policy::Policy, pomdp::POMDP, nsteps::Int64; 
+                   init_threat::Vector{Float64}=[0.1,1.0], init_monitor::Vector{Float64}=[1.0,0.1])
 
-function simulate(policy::PolicyPOMDP, pomdp::POMDP, nSteps::Int)
+    # check that init is valid state
 
-    results = SimulationResults()
-
+    sim = MOMDPSimulation(pomdp, initState, )
     for i = 1:nSteps
-        simulateStep!(results, policy, pomdp, i)
+        simulateStep!(sim, mdp, i, policy)
     end
-
+    return sim
 end
-
-
-# simulates a single step and updates SimulationResults
-function simulateStep!(results::SimulationResults, policy::PolicyPOMDP, pomdp::POMDP, step::Int)
-
-    targets = pomdp.targets
-
-    s = results.lastState
-    b = resilts.lastBelief
-
-    a = getAction(policy, b)
-
-    r = reward(pomdp, s, a)
-
-    coords = [convert(s), targets]
-
-    updateResults!(results, coords, r, b, step)
-    updateResults!(results, pomdp, s, r, b, step)
-
-    s = nextStates(pomdp, s, a)[1][rand(1:end)] # next random state
-    o = observe(pomdp, s)
-
-    b = discreteFilter(b, pomdp, a, o)
-
-    results.lastBelief = b
-    results.lastState  = s
-    
-    return nothing
-end
-
-
-function simulateStep!(results::SimulationResults, policy::PolicyMDP, mdp::MDP, step::Int)
-
-end
-
-
-function updateResults!(r::SimulationResults, c::Vector, r::Float64, b::Vector, step::Int)
-    r.coordinates[step,:] = c
-    r.rewards[step] = r
-    r.belief[step,:] = b
-    r.time[step] = step
-end
-=#
 
 
 end # module
