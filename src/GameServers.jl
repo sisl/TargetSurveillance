@@ -8,8 +8,23 @@ using POMDPToolbox
 using SARSOP
 using DiscreteSniper
 
-export GameServer, SniperServer
-export start, send, parse_results, nearest_neighbor!
+export 
+    # Types
+    GameServer,
+    SniperServer,
+    ClientResults,
+    # Sniper Server methods
+    start,
+    server_socket,
+    # ClientResults methods
+    pos,
+    obs,
+    position_neighbor,
+    observation_neighbor,
+    null_position,
+    fill!,
+    parse!,
+    nearest_neighbor
 
 
 abstract GameServer
@@ -21,122 +36,161 @@ type SniperServer <: GameServer
     protocol::Dict{Symbol, String} # desired operation to protocol
 end
 function SniperServer(socket::Int64; delay::Int64=0, protocol=Dict())
-    ending = "\n"
-    @windows_only ending = "\r"*ending
     if isempty(protocol)
-        protocol[:next] = "next"*ending
-        protocol[:null] = "NULL"*ending
-        protocol[:start_game] = "start"*ending 
-        protocol[:end_game] = "end"*ending
-        protocol[:kill] = "kill"*ending
+        protocol[:next] = "next"
+        protocol[:null] = "NULL"
+        protocol[:start_game] = "start"
+        protocol[:end_game] = "end"
+        protocol[:kill] = "kill"
     end
 
     return SniperServer(socket, delay, protocol)
 end
-function serverSocket(server::SniperServer)
-    return server.socketNumber
-end
+server_socket(s::SniperServer) = s.socketNumber
 
-type GameParams
-    rounders::Matrix{Float64}
-end
 
 type ClientResults
     flag::String
+    rounders::Matrix{Float64} # for finding nearest neighbor
     s::String
     p1::String
     p2::String
-    pos::Vector{Int64}
-    o::Vector{Int64}
+    posi::Vector{Int64}
+    oi::Vector{Int64}
+    posf::Vector{Float64}
+    of::Vector{Float64}
+    null_position::Vector{Int64}
 end
 function ClientResults(;flag::String="split")
-    return ClientResults(flag,"","","",[1,1],[1,1])
+    rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
+    return ClientResults(flag,rounders,"","","",[1,1],[1,1],[1.,1.],[1.,1.],[-1,-1])
 end
-function get(r::ClientResults)
-    return r.s
+raw_string(r::ClientResults) = r.s
+pos(r::ClientResults) = r.posf
+obs(r::ClientResults) = r.of
+position_neighbor(r::ClientResults) = r.posi
+observation_neighbor(r::ClientResults) = r.oi
+null_position(r::ClientResults, p::Vector{Int64}) = r.null_position == p
+function Base.fill!(r::ClientResults, s::String)
+    r.s = s
+    t = split(s, r.flag)
+    r.p1 = strip(t[1])
+    r.p2 = strip(t[2])
+    r
 end
-function position(r::ClientResults)
-    return r.pos
-end
-function observation(r::ClientResults)
-    return r.o
-end
-function read!(r::ClientResults, conn)
-    #TODO: add positions
-    r.s = readline(conn)
-    t = split(r.s, r.flag)
-    r.p1 = split(t[1])
-    r.p2 = split(t[2])
+function parse!(r::ClientResults, pomdp::POMDP, server::SniperServer)
+    rounders = r.rounders
+    ps = r.p1 # position string
+    os = r.p2 # observation string
+    oi = r.oi # observation neighbors
+    posi = r.posi # position neighbors
+    of = r.of # observation neighbors
+    posf = r.posf # position neighbors
+    # fill the position arrays
+    posf[1:end] = float(split(ps))[1:end]
+    nearest_neighbor!(posi, pomdp, posf, rounders)
+    # fill the observaion arrays
+    if os == server.protocol[:null]
+        println("TEST: $oi")
+        fill!(oi,-1)
+        println("TEST: $oi")
+        fill!(of,-1.0)
+    else
+        of[1:end] = float(split(os))[1:end]
+        nearest_neighbor!(oi, pomdp, of, rounders)
+    end
     r
 end
 
+function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, p::Vector{Float64}, rounders::Matrix{Float64})
+    # find the closest valid neighbor 
+    # re-scale to map size
+    p[1] = pomdp.x_size*p[1]; p[2] = pomdp.y_size*p[2]
+    pts = zeros(Int64,2)
+    closest = Inf
+    for i = 1:5
+        pts[1:end] = int(p+rounders[:,i])[1:end]
+        d = sqrt((pts[1]-p[1])^2 + (pts[2]-p[2])^2)
+        # find the distance to the each corner
+        idx = p2i(pomdp, pts)
+        if !in(idx, pomdp.invalid_positions) && d < closest && inbounds(pomdp.map, pts[:,i])
+            pp[1:end] = pts[1:end]
+            closest = d
+        end
+    end
+    pp
+end
 
-function start(server::SniperServer, pomdp::POMDP, policy::Policy)
-    
-    protocol = server.protocol
+function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
+    protocol = sserver.protocol
     map      = pomdp.map
-
-    sn     = serverSocket(server)
+    sn     = server_socket(sserver)
     server = listen(sn)
-
     println("Server Ready")
-
-    game_over = false
-    p = [1, 1]
+    p = [1,1]
     ns = length(collect(domain(part_obs_space(pomdp))))
     b = DiscreteBelief(ns)
-    rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
-    params = GameParams(rounders)
     res = ClientResults()
     while true
         conn = accept(server)
         @async begin
-        stepCount = 1
         try
             println("Connected")
             while true
                 println("Waiting to read")
-                line = readline(conn)
+                line = strip(readline(conn))
                 println("From Client: ", line)
     
                 # begin the game
                 if line == protocol[:start_game]
                     println("Starting the game")
-                    #read!(res, conn)
-                    line = readline(conn)
+                    line = readline(conn) # reads tcp socket
+                    fill!(res, line) # fills and splits the results
+                    parse!(res, pomdp, sserver) # parses the results 
+                    # get closest state positions on the pomdp grid
+                    mp = position_neighbor(res) # returns the closest monitor position
+                    sp = observation_neighbor(res) # returns the closest threat position
                     # initialize belief
-                    # parse the line here for sp and mp
-                    mp, sp = parse_results(pomdp, line)
                     ba = zeros(ns)
-                    if sp == [-1,-1]
-                        si = pomdp.null_obs 
+                    # check if sniper is initially observed and fill belief accordingly 
+                    if null_position(res, sp)
+                        # uniform belief
                         fill!(ba, 1.0/ns)
                     else
+                        # localized belief on a single state
                         si = p2i(pomdp, sp)
                         ba[si] = 1.0
                     end
-                    mi = p2i(pomdp, mp)
-                    println(mi, " ", si, " ", b.b)
-                    # finished initializing
+                    waypoint = "$(mp[1]/pomdp.x_size) $(mp[2]/pomdp.y_size)\n"
+                    write(conn, waypoint) 
+                    println("Initial Positions: \nResource: $mp \nThreat: $sp")
+                    println("Initial Belief: $(b.b)")
 
                 # update belief and send way point info
                 elseif line == protocol[:next]
                     println("Sending waypoint")
                     line = readline(conn)
-                    mp, sp = parse_results(pomdp, line)
-                    println(mp, " ", sp)
-                    println("Belief: $(b.b)")
-                    if sp == [-1,-1]
+                    fill!(res, line)
+                    parse!(res, pomdp, sserver) # parses the results 
+                    # get closest state positions on the pomdp grid
+                    mp = position_neighbor(res) # returns the closest monitor position
+                    sp = observation_neighbor(res) # returns the closest threat position
+                    if null_position(res, sp)
                         si = pomdp.null_obs 
                     else
                         si = p2i(pomdp, sp)
                     end
+                    # find optimal action and updated belief
                     mi = p2i(pomdp, mp)
                     a = action(policy, b, mi)
                     update_belief!(b, pomdp, mi, a, si)
+                    # find the new waypoint
                     move!(p, pomdp, mi, a)
                     waypoint = "$(p[1]/pomdp.x_size) $(p[2]/pomdp.y_size)\n"
                     write(conn, waypoint) 
+                    println("Positions: \nResource: $mp \nThreat: $sp")
+                    println("Waypoint: $waypoint")
+                    println("Belief: $(b.b)")
 
                 # end game
                 elseif line == protocol[:end_game]
@@ -147,7 +201,7 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
                     close(conn)
                     return nothing
                 else
-                    println("No Simulation")
+                    println("Invalid Protocol String")
                 end
             end
         catch err
@@ -158,47 +212,5 @@ function start(server::SniperServer, pomdp::POMDP, policy::Policy)
     end
 end
 
-
-# TODO (max): this needs to be more forgiving to wrong types/values in the input string
-function parse_results(pomdp::POMDP, s::String)
-    t = split(s, "split")
-    mp = float(split(t[1]))
-    nmp = [1,1]
-    nsp = [1,1]
-    println(t, " ", t[1], " ", t[2])
-    println("TEST: $(split(t[2]))")
-    if split(t[2])[1] == "NULL"
-        println("RIGHT")
-        fill!(nsp,-1)
-    else
-        println("WRONG")
-        sp = float(split(t[2]))
-        nearest_neighbor!(nsp, pomdp, sp)
-    end
-    nearest_neighbor!(nmp, pomdp, mp)
-    # create a state type?
-    return nmp, nsp
-end
-
-function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, p::Vector{Float64})
-    # find the closest valid neighbor 
-    # want four corners
-    # rescale p here
-    p[1] = pomdp.x_size*p[1]; p[2] = pomdp.y_size*p[2]
-    rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
-    pts = zeros(Int64,2,5)
-    closest = Inf
-    for i = 1:5
-        pts[:,i] = int(p+rounders[:,i])
-        d = sqrt((pts[1,i]-p[1])^2 + (pts[2,i]-p[2])^2)
-        idx = p2i(pomdp, pts[:,i])
-        if !in(idx, pomdp.invalid_positions) && d < closest && inbounds(pomdp.map, pts[:,i])
-            pp[1:end] = pts[1:end,i]
-            closest = d
-        end
-    end
-    println("Neighbor: $p, $pp")
-    pp
-end
 
 end # module
