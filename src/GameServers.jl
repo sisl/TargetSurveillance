@@ -91,9 +91,7 @@ function parse!(r::ClientResults, pomdp::POMDP, server::SniperServer)
     nearest_neighbor!(posi, pomdp, posf, rounders)
     # fill the observaion arrays
     if os == server.protocol[:null]
-        println("TEST: $oi")
         fill!(oi,-1)
-        println("TEST: $oi")
         fill!(of,-1.0)
     else
         of[1:end] = float(split(os))[1:end]
