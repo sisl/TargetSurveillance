@@ -63,7 +63,8 @@ type ClientResults
 end
 function ClientResults(;flag::String="split")
     rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
-    return ClientResults(flag,rounders,"","","",[1,1],[1,1],[1.,1.],[1.,1.],[-1,-1])
+    np = [-1,-1]
+    return ClientResults(flag,rounders,"","","",[1,1],[1,1],[1.,1.],[1.,1.],np)
 end
 raw_string(r::ClientResults) = r.s
 pos(r::ClientResults) = r.posf
@@ -111,7 +112,7 @@ function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, p::Vector{Float64}, 
         d = sqrt((pts[1]-p[1])^2 + (pts[2]-p[2])^2)
         # find the distance to the each corner
         idx = p2i(pomdp, pts)
-        if !in(idx, pomdp.invalid_positions) && d < closest && inbounds(pomdp.map, pts[:,i])
+        if !in(idx, pomdp.invalid_positions) && d < closest && inbounds(pomdp.map, pts)
             pp[1:end] = pts[1:end]
             closest = d
         end
@@ -153,11 +154,12 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     # check if sniper is initially observed and fill belief accordingly 
                     if null_position(res, sp)
                         # uniform belief
-                        fill!(ba, 1.0/ns)
+                        fill!(b, 1.0/ns)
                     else
                         # localized belief on a single state
                         si = p2i(pomdp, sp)
-                        ba[si] = 1.0
+                        fill!(b, 0.0)
+                        b[si] = 1.0
                     end
                     waypoint = "$(mp[1]/pomdp.x_size) $(mp[2]/pomdp.y_size)\n"
                     write(conn, waypoint) 
@@ -173,6 +175,7 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     # get closest state positions on the pomdp grid
                     mp = position_neighbor(res) # returns the closest monitor position
                     sp = observation_neighbor(res) # returns the closest threat position
+                    si = 0
                     if null_position(res, sp)
                         si = pomdp.null_obs 
                     else
