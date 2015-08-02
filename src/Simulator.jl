@@ -70,7 +70,8 @@ type MOMDPSimulation <: Simulation
     nk::Int64
     nm::Int64
     belief::Matrix{Float64}
-    lastState::Int64 # fully observable var index
+    last_monitor::Int64 # fully observable var index
+    last_threat::Int64 # part observable var index
     lastBelief::Vector{Float64} # belief over partially obs vars
 end
 function MOMDPSimulation(pomdp::POMDP, init_state::Int64, n_steps::Int64;
@@ -149,17 +150,16 @@ end
 
 
 
-function simulate!(sim::MOMDPSimulation, policy::Policy, pomdp::POMDP, nsteps::Int64; 
-                   init_threat::Vector{Float64}=[0.1,1.0], init_monitor::Vector{Float64}=[1.0,0.1])
+function simulate!(sim::MOMDPSimulation, policy::Policy, pomdp::POMDP, nsteps::Int64)
 
     # check that init is valid state
-
-    sim = MOMDPSimulation(pomdp, initState, )
     for i = 1:nSteps
-        simulateStep!(sim, mdp, i, policy)
+        simulateStep!(sim, pomdp, policy, i)
     end
     return sim
 end
+
+function simulateStep!(sim::MOMDPSimulation, policy::Policy, pomdp::POMDP, step::Int64)
 
 
 end # module

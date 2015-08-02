@@ -11,10 +11,10 @@ using GameServers
 sn = int(ARGS[1])
 
 coll = ColladaObjects("../data/maps/demo_map_border2D.dae");
-map = UrbanMap(coll, 10, 10);
+map = UrbanMap(coll, 20, 20);
 pomdp = SniperPOMDP(map)
 
-filename = "../data/policies/resource-1.policy"
+filename = "../data/policies/resource-1-20x20.policy"
 
 policy = PolicyFile(filename, :momdp)
 

@@ -149,8 +149,6 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     # get closest state positions on the pomdp grid
                     mp = position_neighbor(res) # returns the closest monitor position
                     sp = observation_neighbor(res) # returns the closest threat position
-                    # initialize belief
-                    ba = zeros(ns)
                     # check if sniper is initially observed and fill belief accordingly 
                     if null_position(res, sp)
                         # uniform belief
