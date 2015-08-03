@@ -7,6 +7,7 @@ using MOMDPs
 using POMDPToolbox
 using SARSOP
 using DiscreteSniper
+using RayCasters
 
 export 
     # Types
@@ -96,7 +97,7 @@ function parse!(r::ClientResults, pomdp::POMDP, server::SniperServer)
         fill!(of,-1.0)
     else
         of[1:end] = float(split(os))[1:end]
-        nearest_neighbor!(oi, pomdp, of, rounders)
+        nearest_neighbor!(oi, pomdp, of, posi, rounders)
     end
     r
 end
@@ -117,6 +118,18 @@ function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, p::Vector{Float64}, 
             closest = d
         end
     end
+    pp
+end
+
+function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, op::Vector{Float64}, sp::Vector{Int64}, rounders::Matrix{Float64})
+    # check if the observation is possible from current position
+    println("TEST")
+    nearest_neighbor!(pp, pomdp, op, rounders)
+    if isVisible(pomdp.map, pp, sp)
+        return pp
+    end
+    # find the closest observation position that is visible
+    fill!(pp,-1)
     pp
 end
 
