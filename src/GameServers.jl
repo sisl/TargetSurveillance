@@ -61,11 +61,15 @@ type ClientResults
     posf::Vector{Float64}
     of::Vector{Float64}
     null_position::Vector{Int64}
+    threat_neighbor_idxs::Vector{Int64}
+    resource_neighbor_idxs::Vector{Int64}
 end
 function ClientResults(;flag::String="split")
     rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
     np = [-1,-1]
-    return ClientResults(flag,rounders,"","","",[1,1],[1,1],[1.,1.],[1.,1.],np)
+    n1 = zeros(Int64,4)
+    n2 = zeros(Int64,4)
+    return ClientResults(flag,rounders,"","","",[1,1],[1,1],[1.,1.],[1.,1.],np,n1,n2)
 end
 raw_string(r::ClientResults) = r.s
 pos(r::ClientResults) = r.posf
@@ -82,12 +86,16 @@ function Base.fill!(r::ClientResults, s::String)
 end
 function parse!(r::ClientResults, pomdp::POMDP, server::SniperServer)
     rounders = r.rounders
+    # position = (x,y) of resource
+    # observation = (x,y) of threat (or NULL)
     ps = r.p1 # position string
     os = r.p2 # observation string
+    # assign values to these
     oi = r.oi # observation neighbors
     posi = r.posi # position neighbors
     of = r.of # observation neighbors
     posf = r.posf # position neighbors
+    ################################################################# 
     # fill the position arrays
     posf[1:end] = float(split(ps))[1:end]
     nearest_neighbor!(posi, pomdp, posf, rounders)
@@ -100,6 +108,10 @@ function parse!(r::ClientResults, pomdp::POMDP, server::SniperServer)
         nearest_neighbor!(oi, pomdp, of, posi, rounders)
     end
     r
+end
+
+function nearest_neighbor!(r::ClientResults, pomdp::POMDP)
+    # finds the nearest neighbor and fills neighbor matrices
 end
 
 function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, p::Vector{Float64}, rounders::Matrix{Float64})
@@ -120,7 +132,6 @@ function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, p::Vector{Float64}, 
     end
     pp
 end
-
 function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, op::Vector{Float64}, sp::Vector{Int64}, rounders::Matrix{Float64})
     # check if the observation is possible from current position
     println("TEST")
@@ -132,6 +143,9 @@ function nearest_neighbor!(pp::Vector{Int64}, pomdp::POMDP, op::Vector{Float64},
     fill!(pp,-1)
     pp
 end
+
+
+
 
 function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
     protocol = sserver.protocol
@@ -196,6 +210,7 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     mi = p2i(pomdp, mp)
                     a = action(policy, b, mi)
                     update_belief!(b, pomdp, mi, a, si)
+                    #valid(b) ? nothing : fill!(b, idxs, vals)
                     # find the new waypoint
                     move!(p, pomdp, mi, a)
                     waypoint = "$(p[1]/pomdp.x_size) $(p[2]/pomdp.y_size)\n"
