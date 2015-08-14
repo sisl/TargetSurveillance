@@ -157,6 +157,7 @@ function segmentsIntersect(p::Array, p2::Array, q::Array, q2::Array)
         return false
     end
     u = uNum / denom
+    # TODO: The line below is a bottleneck
     t = cross2D(q - p, s) / denom
     return (t >= 0) && (t <= 1) && (u >= 0) && (u <= 1)
 end
