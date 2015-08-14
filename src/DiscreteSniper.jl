@@ -4,7 +4,7 @@ export
     SniperPOMDP,
     create_fully_obs_transition,
     create_partially_obs_transition,
-    create_observation,
+    create_observation_distribution,
     weight, 
     index, 
     fully_obs_space,
@@ -20,15 +20,19 @@ export
     reward,
     transition!,
     observation!,
+    discount,
     move,
     move!,
     inbounds,
+    i2xy!,
+    xy2i,
+    i2s!,
+    s2i,
     i2p!,
     p2i
 
 using MOMDPs
 using POMDPToolbox
-using Distributions
 
 using Maps
 using UrbanMaps
@@ -36,11 +40,13 @@ using Helpers # ind2sub!
 using RayCasters # inBuilding
 
 
-import MOMDPs: create_fully_obs_transition, create_partially_obs_transition, create_observation
+import MOMDPs: create_fully_obs_transition, create_partially_obs_transition, create_observation_distribution,
+create_transition_distribution
 import MOMDPs: weight, index, fully_obs_space, part_obs_space
 import MOMDPs: n_states, n_actions, n_observations 
-import MOMDPs: actions, actions!, observations, observations!, domain
+import MOMDPs: states, actions, actions!, observations, observations!, domain
 import MOMDPs: reward, transition!, observation!
+import MOMDPs: discount
 
 
 
@@ -49,7 +55,8 @@ type SniperPOMDP <: MOMDP
     x_size::Int64
     y_size::Int64
     grid_size::Int64
-    sizes::Vector{Int64}
+    point_sizes::Vector{Int64}
+    state_sizes::Vector{Int64}
     sub_sizes::(Int64,Int64)
     aggrogate_sizes::Vector{Int64}
 
@@ -59,12 +66,13 @@ type SniperPOMDP <: MOMDP
     r_shot::Float64
     r_move::Float64
 
-    adversary_model::Vector{Int64} # policy for adversary
+    adversary_policy::Vector{Int64} # policy for adversary
     adversary_prob::Float64 # prob the adversary follows model
     invalid_positions::Set{Int64}
 
     temp_position::Vector{Int64}
     temp_position2::Vector{Int64}
+    temp_state::Vector{Int64}
     
     target::(Int64,Int64)
 
@@ -75,6 +83,8 @@ type SniperPOMDP <: MOMDP
     agent::Symbol
     lvlk::Bool
 
+    discount_factor::Float64
+
     map::Map
 
     # pre-allocated for memory efficiency
@@ -82,7 +92,8 @@ type SniperPOMDP <: MOMDP
     function SniperPOMDP(map::Map; nSnipers::Int64 = 1, nMonitors::Int64 = 1,
                        target = (2,8),
                        target_reward = 0.1, sniper_reward = -1.0, move_reward = -0.01,
-                       agent::Symbol = :resource, lvlk::Bool=false)
+                       agent::Symbol = :resource, lvlk::Bool=false,
+                       discount_factor::Float64=0.95)
         self = new()
 
         x_size = map.xSize
@@ -91,7 +102,8 @@ type SniperPOMDP <: MOMDP
         self.x_size = x_size
         self.y_size = y_size
         self.grid_size = x_size*y_size
-        self.sizes = [x_size, y_size]
+        self.point_sizes = [x_size, y_size]
+        self.state_sizes = [x_size, y_size, x_size, y_size]
         self.aggrogate_sizes = [x_size*y_size, x_size*y_size]
         self.sub_sizes = (x_size, y_size)
 
@@ -107,14 +119,17 @@ type SniperPOMDP <: MOMDP
 
         self.temp_position = [1,1]
         self.temp_position2 = [1,1]
+        self.temp_state = [1,1,1,1]
         self.invalid_positions = get_invalid_positions(map, x_size, y_size)
 
-        action_map = [0 1 -1 0 0; 0 0 0 1 -1]
+        action_map = [0 1 -1 0 0 1 1 -1 -1; 0 0 0 1 -1 1 -1 1 -1]
         self.action_map = action_map 
         self.n_actions = size(action_map, 2)
 
         self.agent = agent # :resource or :sniper
         self.lvlk = lvlk
+
+        self.discount_factor = discount_factor
 
         return self
     end
@@ -132,12 +147,19 @@ type PODistribution <: SniperDistribution
     interps::Interpolants
 end
 
+# Aggrogate Distribution
+type TransitionDistribution <: SniperDistribution
+    fod::FODistribution
+    pod::PODistribution
+    interps::Interpolants
+end
+
 # currently interps are zero length
 function create_fully_obs_transition(pomdp::SniperPOMDP)
+    # fully observable variable moves deterministically
     interps = Interpolants(1)
     push!(interps, 1, 1.0)
-    d = FODistribution(interps)
-    return d
+    FODistribution(interps)
 end
 
 function create_partially_obs_transition(pomdp::SniperPOMDP)
@@ -148,6 +170,14 @@ function create_partially_obs_transition(pomdp::SniperPOMDP)
     PODistribution(interps)
 end
 
+function create_transition_distribution(pomdp::SniperPOMDP)
+    fod = create_fully_obs_transition(pomdp)
+    pod = create_partially_obs_transition(pomdp)
+    interps = deepcopy(pod.interps)
+    TransitionDistribution(fod, pod, interps)
+end
+
+
 weight(d::SniperDistribution, i::Int64) = d.interps.weights[i]
 index(d::SniperDistribution, i::Int64) = d.interps.indices[i]
 Base.length(d::SniperDistribution) = d.interps.length
@@ -156,6 +186,24 @@ n_states(pomdp::SniperPOMDP) = (pomdp.x_size * pomdp.y_size)^2
 n_actions(pomdp::SniperPOMDP) = pomdp.n_actions
 n_observations(pomdp::SniperPOMDP) = pomdp.x_size * pomdp.y_size + 1 
 
+
+# transition function for aggregate state index
+# state = (xm, ym, xt, yt)
+function transition!(d::TransitionDistribution, pomdp::SniperPOMDP, s::Int64, a::Int64)
+    xy = pomdp.temp_position
+    i2xy!(xy, pomdp, s)
+    x = xy[1]; y = xy[2]
+    transition!(d.fod, pomdp, x, y, a)
+    transition!(d.pod, pomdp, x, y, a)
+    # weights are the same as partially observable dist
+    copy!(d.interps.weights, d.pod.interps.weights)
+    xy[1] = d.fod.interps.indices[1]
+    for i = 1:d.interps.length
+        xy[2] = d.pod.interps.indices[i] 
+        d.interps.indices[i] = xy2i(pomdp, xy)
+    end
+    d
+end
 
 function transition!(d::FODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
     interps = d.interps
@@ -228,7 +276,7 @@ function lvlk_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::In
     na = n_actions(pomdp)
     fill!(interps.weights, 0.2) 
     ag = aggrogate(pomdp, x, y)
-    oa = pomdp.adversary_model[ag]
+    oa = pomdp.adversary_policy[ag]
 
     inside = 1.0
 
@@ -251,7 +299,7 @@ function lvlk_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::In
 end
 
 function move!(p::Vector{Int64}, pomdp::SniperPOMDP, x::Int64, a::Int64)
-    sizes = pomdp.sizes
+    sizes = pomdp.point_sizes
     am = pomdp.action_map 
     ind2sub!(p, sizes, x) 
     p[1] += am[1,a] 
@@ -276,7 +324,7 @@ type ObsDistribution <: SniperDistribution
     interps::Interpolants
 end
 
-function create_observation(pomdp::SniperPOMDP)
+function create_observation_distribution(pomdp::SniperPOMDP)
     interps = Interpolants(1)
     push!(interps, 1, 1.0)
     d = ObsDistribution(interps)
@@ -376,7 +424,7 @@ end
 
 fully_obs_space(pomdp::SniperPOMDP) = VarSpace(1:pomdp.x_size * pomdp.y_size)
 part_obs_space(pomdp::SniperPOMDP) = VarSpace(1:pomdp.x_size * pomdp.y_size)
-
+states(pomdp::SniperPOMDP) = VarSpace(1:pomdp.x_size^2 * pomdp.y_size^2)
 
 type ActionSpace <: AbstractSpace
     action_iter::UnitRange{Int64}
@@ -398,17 +446,36 @@ domain(space::ActionSpace) = space.action_iter
 domain(space::ObservationSpace) = space.obs_iter
 
 
+discount(pomdp::SniperPOMDP) = pomdp.discount_factor
+
 
 function p2i(pomdp::SniperPOMDP, p::Vector{Int64})
-    return sub2ind(pomdp.sizes, p)
+    return sub2ind(pomdp.point_sizes, p)
 end
 
 function i2p!(p::Vector{Int64}, pomdp::SniperPOMDP, i::Int64)
-    sizes = pomdp.sizes
+    sizes = pomdp.point_sizes
     ind2sub!(p, sizes, i)
     p
 end
 
+function s2i(pomdp::SniperPOMDP, s::Vector{Int64})
+    return sub2ind(pomdp.state_sizes, s)
+end
+
+function i2s!(s::Vector{Int64}, pomdp::SniperPOMDP, i::Int64)
+    ind2sub!(s, pomdp.state_sizes, i)
+    s
+end
+
+function xy2i(pomdp::SniperPOMDP, xy::Vector{Int64})
+    return sub2ind(pomdp.aggrogate_sizes, xy)
+end
+
+function i2xy!(xy::Vector{Int64}, pomdp::SniperPOMDP, i::Int64)
+    ind2sub!(xy, pomdp.aggrogate_sizes, i)
+    xy
+end
 
 function get_invalid_positions(map::Map, x_size::Int64, y_size::Int64)
     invalid = Set{Int64}() 
