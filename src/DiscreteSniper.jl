@@ -92,7 +92,9 @@ type SniperPOMDP <: MOMDP
     function SniperPOMDP(map::Map; nSnipers::Int64 = 1, nMonitors::Int64 = 1,
                        target = (2,8),
                        target_reward = 0.1, sniper_reward = -1.0, move_reward = -0.01,
-                       agent::Symbol = :resource, lvlk::Bool=false,
+                       agent::Symbol = :resource, lvlk::Bool=false, 
+                       adversary_policy::Vector{Int64}=zeros(Int64,0),
+                       adversary_prob::Float64=0.5,
                        discount_factor::Float64=0.95)
         self = new()
 
@@ -128,6 +130,10 @@ type SniperPOMDP <: MOMDP
 
         self.agent = agent # :resource or :sniper
         self.lvlk = lvlk
+
+        self.adversary_policy = adversary_policy
+        self.adversary_prob = adversary_prob
+
 
         self.discount_factor = discount_factor
 
@@ -272,27 +278,43 @@ end
 # level-k
 # need the aggrogate state
 function lvlk_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
+    # transition stochastic
+    stochastic_transition!(d, pomdp, x, y, a)
+    # get the level-k policy
     interps = d.interps
-    na = n_actions(pomdp)
-    fill!(interps.weights, 0.2) 
+
+    mu = pomdp.adversary_prob
+
+    # if mu is less than stochastic transition, transition stochastic by default
+    if mu <= interps.weights[1]
+        return d
+    end
+
     ag = aggrogate(pomdp, x, y)
-    oa = pomdp.adversary_policy[ag]
+    lvlk_action = pomdp.adversary_policy[ag]
 
-    inside = 1.0
+    # the number of valid neighbors in uniformaly stochastic transition
+    nvalids = 1.0/interps.weights[1]
 
-    for i = 1:na
-        yp = move(pomdp, y, i)
-        if in(yp, pomdp.invalid_positions)
-            interps.weights[i] = 0.0
-            inside += 1.0
-        else
-            interps.indices[i] = yp
+    new_prob = (1.0 - mu) / (nvalids - 1.0)
+
+    # fill the valid transitions with re-nromalized values
+    for i = 1:length(d)
+        w = weight(d, i)
+        if w > 0.0
+            interps.weights[i] = new_prob 
         end
     end
-    uni_prob = 1.0 / inside 
-    for i = 1:na
-        if interps.weights[i] > 0.0 && i != oa
-            interps.weights[i] = uni_prob
+
+    # assign mu to state that lvl-k policy leads to
+    ytemp = pomdp.temp_position
+    move!(ytemp, pomdp, y, lvlk_action)
+    yp = p2i(pomdp, ytemp)
+    for i = 1:length(d)
+        yidx = index(d, i)
+        if yp == yidx
+            interps.weights[i] = mu
+            break
         end
     end
     d
@@ -310,12 +332,10 @@ end
 
 
 function aggrogate(pomdp::SniperPOMDP, x::Int64, y::Int64)
-    as = pomdp.aggrogate_sizes # e.g [100,100] for 10x10 grid
     temp = pomdp.temp_position
     temp[1] = x
     temp[2] = y
-    s = ind2sub(as, temp)
-    return s
+    return xy2i(pomdp, temp) 
 end
 
 
@@ -357,6 +377,13 @@ function observation!(d::ObsDistribution, pomdp::SniperPOMDP, x::Int64, y::Int64
     d
 end
 
+
+function reward(pomdp::SniperPOMDP, s::Int64, a::Int64)
+    xy = pomdp.temp_position
+    i2xy!(xy, pomdp, s)
+    x = xy[1]; y = xy[2]
+    reward(pomdp, x, y, a)
+end
 
 function reward(pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
     agent = pomdp.agent
@@ -432,6 +459,7 @@ end
 
 actions(pomdp::SniperPOMDP) = ActionSpace(1:n_actions(pomdp))
 actions!(acts::ActionSpace, pomdp::SniperPOMDP, x::Int64, y::Int64) = acts
+actions!(acts::ActionSpace, pomdp::SniperPOMDP, s::Int64) = acts
 
 type ObservationSpace <: AbstractSpace
     obs_iter::UnitRange{Int64}
