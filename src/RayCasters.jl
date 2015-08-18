@@ -13,7 +13,18 @@ function isVisible(map::Map, p1, p2)
 end
 
 
-function isVisible(map::Map, p1x, p1y, p2x, p2y)
+function isVisible(map::Map, p1x::Int64, p1y::Int64, p2x::Int64, p2y::Int64)
+    p1xn = float(p1x); p1yn = float(p1y)
+    p2xn = float(p2x); p2yn = float(p2y)
+    for b in map.buildings
+        if !isVisible(b, p1xn, p1yn, p2xn, p2yn) 
+            return false
+        end
+    end
+    return true
+end
+
+function isVisible(map::Map, p1x::Float64, p1y::Float64, p2x::Float64, p2y::Float64)
     for b in map.buildings
         if !isVisible(b, p1x, p1y, p2x, p2y) 
             return false
@@ -21,7 +32,6 @@ function isVisible(map::Map, p1x, p1y, p2x, p2y)
     end
     return true
 end
-
 
 # check if points within line of sight given a polygon
 # overloaded to add more shapes
