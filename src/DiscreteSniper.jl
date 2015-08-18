@@ -385,6 +385,7 @@ function reward(pomdp::SniperPOMDP, s::Int64, a::Int64)
     reward(pomdp, x, y, a)
 end
 
+# TODO: add seperate reward quantities for resource and threat objectives
 function reward(pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
     agent = pomdp.agent
     if agent == :resource
@@ -429,11 +430,11 @@ function sniper_reward(pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
     end
     # shot reward
     if isVisible(map, px, py)    
-        r += s_reward(pomdp, px, py) 
+        r -= s_reward(pomdp, px, py) # rewards inversed
     end
     # obs reward 
     if isVisible(map, py, target)
-        r += o_reward(pomdp, py, target)
+        r -= o_reward(pomdp, py, target) # rewards inversed
     end
     return r
 end
