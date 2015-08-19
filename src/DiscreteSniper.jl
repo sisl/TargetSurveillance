@@ -4,6 +4,7 @@ export
     SniperPOMDP,
     create_fully_obs_transition,
     create_partially_obs_transition,
+    create_transition_distribution,
     create_observation_distribution,
     weight, 
     index, 
