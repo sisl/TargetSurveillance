@@ -152,7 +152,12 @@ function Base.size(d::Dict)
 end
 
 # writes policy results to files
-function Base.write(policy::NestedPolicy)
+function Base.write(policy::NestedPolicy; overwrite::Bool=false)
+    file = policy.file
+
+    # if file exists, overwrite flag must be set to true to write new policy
+    isfile(file) && !overwrite ? return : nothing
+
     own = policy.own_policies
     adv = policy.adv_policies
 
@@ -171,7 +176,7 @@ function Base.write(policy::NestedPolicy)
         fill!(nd, adv[i])
         push!(d["adv"], deepcopy(nd))
     end
-    save(policy.file, "policy", d)
+    save(file, "policy", d)
 end
 
 function Base.fill!(d::Dict, p::ValueIterationPolicy)
