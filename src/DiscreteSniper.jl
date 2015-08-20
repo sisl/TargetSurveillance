@@ -97,6 +97,8 @@ type SniperPOMDP <: MOMDP
                        adversary_policy::Vector{Int64}=zeros(Int64,0),
                        adversary_prob::Float64=0.5,
                        discount_factor::Float64=0.95)
+        @assert agent == :resource || agent == :sniper "Invalid agent type"
+
         self = new()
 
         x_size = map.xSize
@@ -291,7 +293,9 @@ function lvlk_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::In
         return d
     end
 
-    ag = aggrogate(pomdp, x, y)
+    # NOTE: aggrogate is over (x,y) not (y,x)
+    # The policies are generated for the adversary (y var), so we want the action for their state config
+    ag = aggrogate(pomdp, y, x)
     lvlk_action = pomdp.adversary_policy[ag]
 
     # the number of valid neighbors in uniformaly stochastic transition

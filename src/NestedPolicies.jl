@@ -156,7 +156,7 @@ function Base.write(policy::NestedPolicy; overwrite::Bool=false)
     file = policy.file
 
     # if file exists, overwrite flag must be set to true to write new policy
-    isfile(file) && !overwrite ? return : nothing
+    isfile(file) && !overwrite ? (return) : nothing
 
     own = policy.own_policies
     adv = policy.adv_policies
