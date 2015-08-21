@@ -2,6 +2,7 @@ module DiscreteSniper
 
 export 
     SniperPOMDP,
+    create_state,
     create_fully_obs_transition,
     create_partially_obs_transition,
     create_transition_distribution,
@@ -22,6 +23,7 @@ export
     transition!,
     observation!,
     discount,
+    # misc
     move,
     move!,
     inbounds,
@@ -30,7 +32,9 @@ export
     i2s!,
     s2i,
     i2p!,
-    p2i
+    p2i,
+    aggrogate,
+    valid_action
 
 using MOMDPs
 using POMDPToolbox
@@ -42,7 +46,7 @@ using RayCasters # inBuilding
 
 
 import MOMDPs: create_fully_obs_transition, create_partially_obs_transition, create_observation_distribution,
-create_transition_distribution
+create_transition_distribution, create_state
 import MOMDPs: weight, index, fully_obs_space, part_obs_space
 import MOMDPs: n_states, n_actions, n_observations 
 import MOMDPs: states, actions, actions!, observations, observations!, domain
@@ -144,6 +148,23 @@ type SniperPOMDP <: MOMDP
     end
 end
 
+# returns a random initial state
+function create_state(pomdp::SniperPOMDP)
+    invalids = pomdp.invalid_positions
+    p1 = pomdp.temp_position
+    p2 = pomdp.temp_position2
+    s1 = rand(1:pomdp.grid_size); 
+    s2 = rand(1:pomdp.grid_size)
+    i2p!(p1, pomdp, s1); i2p!(p1, pomdp, s2)
+    while isVisible(pomdp.map, p1, p2) || in(s1, invalids) || in(s2, invalids)
+        s1 = rand(1:pomdp.grid_size)
+        s2 = rand(1:pomdp.grid_size)
+        i2p!(p1, pomdp, s1); i2p!(p1, pomdp, s2)
+    end
+    s = aggrogate(pomdp, s1, s2)
+    return s
+end
+
 abstract SniperDistribution <: AbstractDistribution
 
 # Fully Observable Distribution
@@ -196,7 +217,7 @@ n_actions(pomdp::SniperPOMDP) = pomdp.n_actions
 n_observations(pomdp::SniperPOMDP) = pomdp.x_size * pomdp.y_size + 1 
 
 
-# transition function for aggregate state index
+# transition function for aggrogate state index
 # state = (xm, ym, xt, yt)
 function transition!(d::TransitionDistribution, pomdp::SniperPOMDP, s::Int64, a::Int64)
     xy = pomdp.temp_position
@@ -511,6 +532,19 @@ function i2xy!(xy::Vector{Int64}, pomdp::SniperPOMDP, i::Int64)
     xy
 end
 
+# check if action a is valid from point index p
+function valid_action(pomdp::SniperPOMDP, p::Int64, a::Int64)
+    invalids = pomdp.invalid_positions 
+    pos = pomdp.temp_position
+    move!(pos, pomdp, p, a)
+    pp = p2i(pomdp, pos)
+    # if an invalid state then action is invalid
+    if in(pp, invalids) || !inbounds(pomdp.map, pos)
+        return false
+    end
+    return true
+end
+
 function get_invalid_positions(map::Map, x_size::Int64, y_size::Int64)
     invalid = Set{Int64}() 
     sub_size = (x_size, y_size)
@@ -525,7 +559,6 @@ function get_invalid_positions(map::Map, x_size::Int64, y_size::Int64)
     end
     return invalid
 end
-
 
 
 end # module
