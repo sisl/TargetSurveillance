@@ -75,6 +75,9 @@ end
 # returns the policy for the given reasoning level (k)
 # given the agent (1 = own), (2 = adversary)
 function get_policy(policy::NestedPolicy, k::Int64, agent::Int64)
+    k += 1
+    n = length(policy.own_policies)
+    @assert k <= n "Can not extract level-$k policy, only level-$(n-1) available"
     agent == 2 ? (return policy.adv_policies[k]) : nothing
     return policy.own_policies[k]
 end
