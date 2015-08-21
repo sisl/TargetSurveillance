@@ -89,7 +89,7 @@ function file_name(path::ASCIIString, k::Int64, policy::NestedPolicy, pomdp::Sni
 end
 
 # computes the nested policies for the sniper pomdp using value iteration
-function solve!(policy::NestedPolicy, solver::NestedSolver, model::SniperPOMDP)
+function solve!(policy::NestedPolicy, solver::NestedSolver, model::SniperPOMDP; dump::Bool=true)
     n_iter = solver.n_iter
     eps = solver.eps
     verbose = solver.verbose
@@ -103,31 +103,33 @@ function solve!(policy::NestedPolicy, solver::NestedSolver, model::SniperPOMDP)
 
     # level-0 own
     pomdp = SniperPOMDP(map, agent=:resource)
-    policy = ValueIterationPolicy(pomdp)
+    po = ValueIterationPolicy(pomdp)
     solver = ValueIterationSolver(n_iter, eps)
-    solve!(policy, solver, pomdp, verbose=true)
-    push!(own, deepcopy(policy))
+    solve!(po, solver, pomdp, verbose=true)
+    push!(own, deepcopy(po))
     # level-0 adversary
     pomdp = SniperPOMDP(map, agent=:sniper)
-    policy = ValueIterationPolicy(pomdp)
+    pa = ValueIterationPolicy(pomdp)
     solver = ValueIterationSolver(n_iter, eps)
-    solve!(policy, solver, pomdp, verbose=true)
-    push!(adv, deepcopy(policy))
+    solve!(pa, solver, pomdp, verbose=true)
+    push!(adv, deepcopy(pa))
 
     for i = 1:k
         verbose ? println("\nStarting: Level-$i\n") : nothing
         # find level-i resource policy
         p = adv[i].policy # the level k-1 policy
         pomdp = SniperPOMDP(map, adversary_policy=p, adversary_prob=mu, lvlk=true, agent=:resource)
-        policy = ValueIterationPolicy(pomdp)
-        solve!(policy, solver, pomdp, verbose=true)
-        push!(own, deepcopy(policy))
+        po = ValueIterationPolicy(pomdp)
+        solve!(po, solver, pomdp, verbose=true)
+        push!(own, deepcopy(po))
         # find level-i sniper policy 
         p = own[i].policy # level k-1 policy
         pomdp = SniperPOMDP(map, adversary_policy=p, adversary_prob=mu, lvlk=true, agent=:sniper)
-        policy = ValueIterationPolicy(pomdp)
-        solve!(policy, solver, pomdp, verbose=true)
-        push!(adv, deepcopy(policy))
+        pa = ValueIterationPolicy(pomdp)
+        solve!(pa, solver, pomdp, verbose=true)
+        push!(adv, deepcopy(pa))
+        # write to file
+        dump ? (write(policy, overwrite=true)) : (nothing)
     end
     policy
 end
