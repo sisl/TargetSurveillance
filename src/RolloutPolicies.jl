@@ -7,8 +7,10 @@ export
     RandomPolicy,
     action
 
+import POMDPs: action
 
-type RandomPolicy
+
+type RandomPolicy <: Policy
     pomdp::SniperPOMDP
 end
 
