@@ -103,7 +103,12 @@ function getObjectProperties(meshes::Vector, objNum::Int)
 
     source = get_elements_by_tagname(objMesh, "source") # norm and pos geometry
     vertices = get_elements_by_tagname(objMesh, "vertices")[1]
-    triangles = get_elements_by_tagname(objMesh, "polylist")[1]
+    triangles = get_elements_by_tagname(objMesh, "polylist")
+    # hack to work with both keys
+    if isempty(triangles)
+        triangles = get_elements_by_tagname(objMesh, "triangles")
+    end
+    triangles = triangles[1]
 
     inp = find_element(vertices, "input") # first input attribute
     sem = attribute(inp, "semantic")
