@@ -25,7 +25,8 @@ type UrbanMap <: Map
     yLengths::Vector{Float64}
 
     # TODO: need to deal with normalizing the building vertices for diff x,y sizes
-    function UrbanMap(coll::Collada, xSize::Int64, ySize::Int64)
+    function UrbanMap(coll::Collada, xSize::Int64, ySize::Int64; 
+                      shift::Bool=true, shift_val::Float64=1.0)
         self = new()
 
         nBuildings = coll.nObjects
@@ -40,7 +41,13 @@ type UrbanMap <: Map
         self.nBuildings = nBuildings
 
         # assumes a square grid
-        self.buildings = [Polygon(xSize * c.points, c.vertices) for c in coll.normalizedObjects] 
+        buildings = None
+        if shift
+            #self.buildings = [Polygon(shift_map(xSize * (xSize-1)/xSize * c.points, xSize, ySize, shift_val), c.vertices) for c in coll.normalizedObjects]
+            self.buildings = [Polygon(shift_map(xSize * c.points, xSize, ySize, shift_val), c.vertices) for c in coll.normalizedObjects]
+        else
+            self.buildings = [Polygon(xSize * c.points, c.vertices) for c in coll.normalizedObjects]
+        end
 
         return self
     end
@@ -105,6 +112,29 @@ type UrbanMap <: Map
 
 end
 
+# shift map down and left for symmetry
+function shift_map(pts::Matrix{Float64}, xs::Int64, ys::Int64, shift_val::Float64)
+    (np, ndim) = size(pts)
+    npts = zeros(np, ndim)
+    for i = 1:np
+        npts[i,1] = pts[i,1] + shift_val/(xs)*xs
+        npts[i,2] = pts[i,2] + shift_val/(ys)*xs
+        npts[i,3] = pts[i,3] 
+    end
+    return npts
+end
+
+function order_points(pts::Matrix{Float64}, verts::Vector{Int64})
+    (np, ndim) = size(pts)
+    nv = length(verts)
+    println("$nv, $np")
+    @assert nv == np "Vertex and point size mismatch in .dae file"
+    npts = zeros(np, ndim)
+    for i = 1:np
+        npts[i,:] = pts[verts[i],:]
+    end
+    return npts
+end
 
 function locals(map::UrbanMap)
     return (map.xCenters, map.yCenters, map.xLengths, map.yLengths)
