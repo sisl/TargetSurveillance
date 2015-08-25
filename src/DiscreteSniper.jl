@@ -34,7 +34,10 @@ export
     i2p!,
     p2i,
     aggrogate,
-    valid_action
+    valid_action,
+    isVisible,
+    get_visibles,
+    get_ballistics
 
 using MOMDPs
 using POMDPToolbox
@@ -43,6 +46,7 @@ using Maps
 using UrbanMaps
 using Helpers # ind2sub!
 using RayCasters # inBuilding
+using BallisticModels
 
 
 import MOMDPs: create_fully_obs_transition, create_partially_obs_transition, create_observation_distribution,
@@ -52,8 +56,11 @@ import MOMDPs: n_states, n_actions, n_observations
 import MOMDPs: states, actions, actions!, observations, observations!, domain
 import MOMDPs: reward, transition!, observation!
 import MOMDPs: discount
+import RayCasters: isVisible
 
 
+const LINEAR_BALLISTICS = [1.0,-0.5]
+const FOURTH_ORDER_BALLISTICS = [1.0, -0.886851, 0.15398, 0.0460204, -0.0131487]
 
 type SniperPOMDP <: MOMDP
 
@@ -77,30 +84,40 @@ type SniperPOMDP <: MOMDP
 
     temp_position::Vector{Int64}
     temp_position2::Vector{Int64}
+    temp_position3::Vector{Int64}
     temp_state::Vector{Int64}
     
-    target::(Int64,Int64)
+    target::(Float64,Float64)
 
     action_map::Matrix{Float64}
 
     null_obs::Int64
 
-    agent::Symbol
+    agent::Symbol # :resource or :sniper
     lvlk::Bool
 
     discount_factor::Float64
 
     map::Map
 
+    visibles::Matrix{Bool}
+
+    ballistic_model::BallisticModel
+    obs_model::BallisticModel
+    ballistics::Matrix{Float64}
+    obs::Vector{Float64}
+
     # pre-allocated for memory efficiency
 
     function SniperPOMDP(map::Map; nSnipers::Int64 = 1, nMonitors::Int64 = 1,
-                       target = (2,8),
+                       target = (0.2,0.8), # in normalized cooridnates
                        target_reward = 0.1, sniper_reward = -1.0, move_reward = -0.01,
                        agent::Symbol = :resource, lvlk::Bool=false, 
                        adversary_policy::Vector{Int64}=zeros(Int64,0),
                        adversary_prob::Float64=0.5,
-                       discount_factor::Float64=0.95)
+                       discount_factor::Float64=0.95,
+                       ballistic_model::BallisticModel=SimplePoly(LINEAR_BALLISTICS),
+                       obs_model::BallisticModel=Constant())
         @assert agent == :resource || agent == :sniper "Invalid agent type"
 
         self = new()
@@ -122,12 +139,14 @@ type SniperPOMDP <: MOMDP
         self.r_shot = sniper_reward
         self.r_move = move_reward
 
-        self.target = target
+        target_coords = (x_size*target[1], y_size*target[2])
+        self.target = target_coords
 
         self.map = map
 
         self.temp_position = [1,1]
         self.temp_position2 = [1,1]
+        self.temp_position3 = [1,1]
         self.temp_state = [1,1,1,1]
         self.invalid_positions = get_invalid_positions(map, x_size, y_size)
 
@@ -141,6 +160,12 @@ type SniperPOMDP <: MOMDP
         self.adversary_policy = adversary_policy
         self.adversary_prob = adversary_prob
 
+        self.visibles = get_visibles(map, x_size, y_size)
+
+        self.ballistic_model = ballistic_model
+        self.obs_model = obs_model
+        self.ballistics = get_ballistics(map, ballistic_model, x_size, y_size)
+        #self.obs = get_ballistics(map, obs_model, x_size, y_size)
 
         self.discount_factor = discount_factor
 
@@ -153,13 +178,13 @@ function create_state(pomdp::SniperPOMDP)
     invalids = pomdp.invalid_positions
     p1 = pomdp.temp_position
     p2 = pomdp.temp_position2
-    s1 = rand(1:pomdp.grid_size); 
+    s1 = rand(1:pomdp.grid_size)
     s2 = rand(1:pomdp.grid_size)
-    i2p!(p1, pomdp, s1); i2p!(p1, pomdp, s2)
+    i2p!(p1, pomdp, s1); i2p!(p2, pomdp, s2)
     while isVisible(pomdp.map, p1, p2) || in(s1, invalids) || in(s2, invalids)
         s1 = rand(1:pomdp.grid_size)
         s2 = rand(1:pomdp.grid_size)
-        i2p!(p1, pomdp, s1); i2p!(p1, pomdp, s2)
+        i2p!(p1, pomdp, s1); i2p!(p2, pomdp, s2)
     end
     s = aggrogate(pomdp, s1, s2)
     return s
@@ -346,15 +371,41 @@ function lvlk_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64, y::In
     d
 end
 
+#=
 function move!(p::Vector{Int64}, pomdp::SniperPOMDP, x::Int64, a::Int64)
     sizes = pomdp.point_sizes
     am = pomdp.action_map 
+    pp = pomdp.temp_position3
+    # find the point of index x
     ind2sub!(p, sizes, x) 
+    # copy to temp position
+    copy!(pp, p)
+    # move temp position
+    pp[1] += am[1,a] 
+    pp[2] += am[2,a] 
+    if !inbounds(pomdp.map, pp)
+        # dont move if out of bounds
+        return p
+    end
+    xp = p2i(pomdp, pp)
+    # only move p to temp position if that point is visible, otherwise stay 
+    if isVisible(pomdp, x, xp)
+        copy!(p, pp)
+    end
+    p
+end
+=#
+
+function move!(p::Vector{Int64}, pomdp::SniperPOMDP, x::Int64, a::Int64)
+    sizes = pomdp.point_sizes
+    am = pomdp.action_map 
+    # find the point of index x
+    ind2sub!(p, sizes, x) 
+    # move position
     p[1] += am[1,a] 
     p[2] += am[2,a] 
     p
 end
-
 
 
 function aggrogate(pomdp::SniperPOMDP, x::Int64, y::Int64)
@@ -392,7 +443,7 @@ function observation!(d::ObsDistribution, pomdp::SniperPOMDP, x::Int64, y::Int64
         temp2 = pomdp.temp_position2
         i2p!(temp1, pomdp, x)
         i2p!(temp2, pomdp, y)
-        if isVisible(pomdp.map, temp1, temp2)
+        if isVisible(pomdp, x, y)
             # if the two points visible observation is position of y
             interps.indices[1] = y
         else
@@ -433,9 +484,10 @@ function resource_reward(pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
         r += pomdp.r_move
     end
     # shot reward
-    if isVisible(map, px, py)    
-        r += s_reward(pomdp, px, py) 
-    end
+    #if isVisible(pomdp, x, y)    
+    #    r += s_reward(pomdp, px, py) 
+    #end
+    r += s_reward(pomdp, x, y)
     # obs reward 
     if isVisible(map, px, target)
         r += o_reward(pomdp, px, target)
@@ -455,9 +507,12 @@ function sniper_reward(pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
         r += pomdp.r_move
     end
     # shot reward
-    if isVisible(map, px, py)    
+    #=
+    if isVisible(pomdp, x, y)    
         r -= s_reward(pomdp, px, py) # rewards inversed
     end
+    =#
+    r -= s_reward(pomdp, x, y)
     # obs reward 
     if isVisible(map, py, target)
         r -= o_reward(pomdp, py, target) # rewards inversed
@@ -467,7 +522,13 @@ end
 function s_reward(pomdp::SniperPOMDP, px::Vector{Int64}, py::Vector{Int64})
     return pomdp.r_shot 
 end
+function s_reward(pomdp::SniperPOMDP, x::Int64, y::Int64)
+    return pomdp.r_shot * pomdp.ballistics[x,y]
+end
 function o_reward(pomdp::SniperPOMDP, px::Vector{Int64}, target::(Int64,Int64))
+    return pomdp.r_obs
+end
+function o_reward(pomdp::SniperPOMDP, px::Vector{Int64}, target::(Float64,Float64))
     return pomdp.r_obs
 end
 
@@ -532,6 +593,10 @@ function i2xy!(xy::Vector{Int64}, pomdp::SniperPOMDP, i::Int64)
     xy
 end
 
+function isVisible(pomdp::SniperPOMDP, x::Int64, y::Int64)
+    return pomdp.visibles[x,y]
+end
+
 # check if action a is valid from point index p
 function valid_action(pomdp::SniperPOMDP, p::Int64, a::Int64)
     invalids = pomdp.invalid_positions 
@@ -560,5 +625,34 @@ function get_invalid_positions(map::Map, x_size::Int64, y_size::Int64)
     return invalid
 end
 
+function get_visibles(map::Map, xs::Int64, ys::Int64)
+    npts = xs*ys
+    visibles = zeros(Bool, npts, npts)
+    p1 = [1,1]
+    p2 = [1,1]
+    sizes = [xs, ys]
+    for i = 1:npts, j = 1:npts
+        ind2sub!(p1, sizes, i)
+        ind2sub!(p2, sizes, j)
+        isVisible(map, p1, p2) ? (visibles[i,j] = true) : (visibles[i,j] = false)
+    end
+    return visibles
+end
+
+function get_ballistics(map::Map, m::BallisticModel, xs::Int64, ys::Int64)
+    npts = xs*ys
+    ballistics = zeros(npts, npts)
+    p1 = [1,1]
+    p2 = [1,1]
+    sizes = [xs, ys]
+    for i = 1:npts, j = 1:npts
+        ind2sub!(p1, sizes, i)
+        ind2sub!(p2, sizes, j)
+        if isVisible(map, p1, p2)
+            ballistics[i,j] = prob(m, p1, p2, xs, ys)  
+        end
+    end
+    return ballistics
+end
 
 end # module
