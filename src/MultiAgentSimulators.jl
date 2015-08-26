@@ -7,20 +7,21 @@ using BallisticModels
 using POMDPToolbox
 
 export
-    TwoAgetnSim,
+    TwoAgentSim,
     TwoMDPSim,
     TwoPOMDPSim,
     TwoMixedSim,
     batch,
     simulate!,
     reset!,
-    stats
+    stats,
+    full_stats
 
 
-abstract TwoAgetnSim
+abstract TwoAgentSim
 
 # MDP vs MDP policy
-type TwoMDPSim <: TwoAgetnSim
+type TwoMDPSim <: TwoAgentSim
     nsteps::Int64 # number of times steps in sim
     s1::Int64 # initial state 1
     s2::Int64 # initial state 2
@@ -29,13 +30,15 @@ type TwoMDPSim <: TwoAgetnSim
     shot::Int64 # num times resource shot
     obs::Int64 # num times target observed
     moves::Int64 # total number of moves
+    prf::Vector{Int64} # position where the resource was killed
+    psf::Vector{Int64} # position where the sniper was when killed
 end
 function TwoMDPSim(s1::Int64, s2::Int64, n::Int64)
-    return TwoMDPSim(n, s1, s2, 0.0, 0.0, 0, 0, 0)
+    return TwoMDPSim(n, s1, s2, 0.0, 0.0, 0, 0, 0, [-1,-1], [-1,-1])
 end
 
 # POMDP vs POMDP policy
-type TwoPOMDPSim <: TwoAgetnSim
+type TwoPOMDPSim <: TwoAgentSim
     nsteps::Int64 # number of times steps in sim
     s1::Int64 # initial state 1
     s2::Int64 # initial state 2
@@ -46,17 +49,23 @@ type TwoPOMDPSim <: TwoAgetnSim
     shot::Int64 # num times resource shot
     obs::Int64 # num times target observed
     moves::Int64 # total number of moves
+    prf::Vector{Int64} # position where the resource was killed
+    psf::Vector{Int64} # position where the sniper was when killed
 end
 function TwoPOMDPSim(s1::Int64, s2::Int64, b1::Belief, b2::Belief, n::Int64)
-    return TwoMDPSim(n, s1, s2, b1, b2, 0.0, 0.0, 0, 0, 0)
+    return TwoPOMDPSim(n, s1, s2, b1, b2, 0.0, 0.0, 0, 0, 0, [-1,-1], [-1,-1])
+end
+function TwoPOMDPSim(s1::Int64, s2::Int64, n::Int64)
+
 end
 
 # MDP vs POMDP policy
-type TwoMixedSim <: TwoAgetnSim
+type TwoMixedSim <: TwoAgentSim
 
 end
 
-stats(sim::TwoAgetnSim) = (sim.r, sim.shot, sim.obs, sim.moves, sim.ttk)
+stats(sim::TwoAgentSim) = (sim.r, sim.shot, sim.obs, sim.moves, sim.tt)
+full_stats(sim::TwoAgentSim) = (sim.r, sim.shot, sim.obs, sim.moves, sim.ttk, sim.prf, sim.psf)
 
 function reset!(sim::TwoMDPSim, s1::Int64, s2::Int64)
     sim.s1 = s1
@@ -109,14 +118,20 @@ function simulate!(sim::TwoMDPSim,
         a1 = action(p1, s1agg)
         a2 = action(p2, s2agg)
         # count statistics 
-        r += reward(pomdp, s1agg, a1)
+        currentr = reward(pomdp, s1agg, a1)
+        ttk = i
+        #r += reward(pomdp, s1agg, a1)
         sprob = prob(ballistic_model, pos1, pos2, xs, ys)
         rn = rand()
         if isVisible(map, pos1, pos2) && rn < sprob
             shot += 1
-            ttk = i 
+            r += currentr
+            copy!(sim.prf, pos1)
+            copy!(sim.psf, pos2)
             break
         end
+        # only add sniper reward if shot
+        currentr > -0.1 ? (r+=currentr) : (nothing)
         isVisible(map, pos1, target) ? (obs+=1) : (nothing)
         a1 != 1 ? (moves+=1) : (nothing)
         # move each entity
@@ -125,7 +140,7 @@ function simulate!(sim::TwoMDPSim,
         s1 = p2i(pomdp, pos1)
         s2 = p2i(pomdp, pos2)
         s1agg = aggrogate(pomdp, s1, s2) 
-        s2agg = aggrogate(pomdp, s2, s1) 
+        s2agg = aggrogate(pomdp, s2, s1)
     end
     sim.r=r; sim.shot=shot; sim.obs=obs; sim.moves=moves; sim.ttk = ttk
     sim
