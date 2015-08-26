@@ -24,6 +24,15 @@ function isVisible(map::Map, p1x::Int64, p1y::Int64, p2x::Int64, p2y::Int64)
     return true
 end
 
+function isVisible(map::Map, p1x::Float64, p1y::Float64, p2x::Int64, p2y::Int64)
+    p2xn = float(p2x); p2yn = float(p2y)
+    return isVisible(map, p1x, p1y, p2xn, p2yn)
+end
+function isVisible(map::Map, p1x::Int64, p1y::Int64, p2x::Float64, p2y::Float64)
+    p1xn = float(p1x); p1yn = float(p1y)
+    return isVisible(map, p1xn, p1yn, p2x, p2y)
+end
+
 function isVisible(map::Map, p1x::Float64, p1y::Float64, p2x::Float64, p2y::Float64)
     for b in map.buildings
         if !isVisible(b, p1x, p1y, p2x, p2y) 
