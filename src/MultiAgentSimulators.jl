@@ -3,6 +3,8 @@ module MultiAgentSimulators
 using DiscreteSniper
 using MOMDPs
 using RayCasters
+using BallisticModels
+using POMDPToolbox
 
 export
     TwoAgetnSim,
@@ -22,13 +24,14 @@ type TwoMDPSim <: TwoAgetnSim
     nsteps::Int64 # number of times steps in sim
     s1::Int64 # initial state 1
     s2::Int64 # initial state 2
+    ttk::Float64 # mean time to kill
     r::Float64 # total reward
     shot::Int64 # num times resource shot
     obs::Int64 # num times target observed
     moves::Int64 # total number of moves
 end
 function TwoMDPSim(s1::Int64, s2::Int64, n::Int64)
-    return TwoMDPSim(n, s1, s2, 0.0, 0, 0, 0)
+    return TwoMDPSim(n, s1, s2, 0.0, 0.0, 0, 0, 0)
 end
 
 # POMDP vs POMDP policy
@@ -38,10 +41,14 @@ type TwoPOMDPSim <: TwoAgetnSim
     s2::Int64 # initial state 2
     b1::Belief # inital belief 1
     b2::Belief # initial belief 2
+    ttk::Int64 # time to kill
     r::Float64 # total reward
     shot::Int64 # num times resource shot
     obs::Int64 # num times target observed
     moves::Int64 # total number of moves
+end
+function TwoPOMDPSim(s1::Int64, s2::Int64, b1::Belief, b2::Belief, n::Int64)
+    return TwoMDPSim(n, s1, s2, b1, b2, 0.0, 0.0, 0, 0, 0)
 end
 
 # MDP vs POMDP policy
@@ -49,23 +56,30 @@ type TwoMixedSim <: TwoAgetnSim
 
 end
 
-stats(sim::TwoAgetnSim) = (sim.r, sim.shot, sim.obs, sim.moves)
+stats(sim::TwoAgetnSim) = (sim.r, sim.shot, sim.obs, sim.moves, sim.ttk)
 
 function reset!(sim::TwoMDPSim, s1::Int64, s2::Int64)
     sim.s1 = s1
     sim.s2 = s2
     sim.r = 0.0
-    sim.shot = sim.obs = sim.moves = 0
+    sim.shot = sim.obs = sim.moves = sim.ttk = 0
     sim
 end
 
-function reset!(sim::TwoMDPSim, s1::Int64, s2::Int64, b1::Belief, b2::Belief)
+function reset!(sim::TwoPOMDPSim, s1::Int64, s2::Int64, b1::Belief, b2::Belief)
     sim.s1 = s1
     sim.s2 = s2
     sim.b1 = b1
     sim.b2 = b2
     sim.r = 0.0
-    sim.shot = sim.obs = sim.moves = 0
+    sim.shot = sim.obs = sim.moves = sim.ttk = 0
+    sim
+end
+function reset!(sim::TwoPOMDPSim, s1::Int64, s2::Int64)
+    sim.s1 = s1
+    sim.s2 = s2
+    sim.r = 0.0
+    sim.shot = sim.obs = sim.moves = sim.ttk = 0
     sim
 end
 
@@ -74,8 +88,11 @@ function simulate!(sim::TwoMDPSim,
                   p1::Policy,
                   p2::Policy;
                   verbose::Bool=true)
-
+    
+    ballistic_model = pomdp.ballistic_model
     map = pomdp.map
+    xs = pomdp.x_size
+    ys = pomdp.y_size
     s1i = sim.s1
     s2i = sim.s2
     s1agg = aggrogate(pomdp, s1i, s2i) 
@@ -86,14 +103,20 @@ function simulate!(sim::TwoMDPSim,
     pos1 = [1,1]; pos2 = [1,1]
     i2p!(pos1, pomdp, s1)
     i2p!(pos2, pomdp, s2)
-    r = 0.0; shot = 0; obs = 0; moves = 0
+    r = 0.0; shot = 0; obs = 0; moves = 0; ttk = 0
     for i = 1:sim.nsteps
         verbose ? println("State: $s1agg, $s2agg, $pos1, $pos2, Stats: $r, $shot, $obs, $moves") : nothing
         a1 = action(p1, s1agg)
         a2 = action(p2, s2agg)
         # count statistics 
         r += reward(pomdp, s1agg, a1)
-        isVisible(map, pos1, pos2) ? (shot+=1) : (nothing) 
+        sprob = prob(ballistic_model, pos1, pos2, xs, ys)
+        rn = rand()
+        if isVisible(map, pos1, pos2) && rn < sprob
+            shot += 1
+            ttk = i 
+            break
+        end
         isVisible(map, pos1, target) ? (obs+=1) : (nothing)
         a1 != 1 ? (moves+=1) : (nothing)
         # move each entity
@@ -104,10 +127,66 @@ function simulate!(sim::TwoMDPSim,
         s1agg = aggrogate(pomdp, s1, s2) 
         s2agg = aggrogate(pomdp, s2, s1) 
     end
-    sim.r=r; sim.shot=shot; sim.obs=obs; sim.moves=moves
+    sim.r=r; sim.shot=shot; sim.obs=obs; sim.moves=moves; sim.ttk = ttk
     sim
 end
 
 
+# both p1 and p2 are MOMDP policies
+function simulate!(sim::TwoPOMDPSim, 
+                  pomdp::SniperPOMDP,
+                  p1::Policy,
+                  p2::Policy;
+                  verbose::Bool=true)
+    
+    ballistic_model = pomdp.ballistic_model
+    map = pomdp.map
+    xs = pomdp.x_size
+    ys = pomdp.y_size
+    s1i = sim.s1
+    s2i = sim.s2
+    # get aggrogate state indices
+    s1agg = aggrogate(pomdp, s1i, s2i) 
+    s2agg = aggrogate(pomdp, s2i, s1i) 
+    s1 = deepcopy(s1i)
+    s2 = deepcopy(s2i)
+    target = pomdp.target
+    pos1 = [1,1]; pos2 = [1,1]
+    # get true positions on the grid
+    i2p!(pos1, pomdp, s1)
+    i2p!(pos2, pomdp, s2)
+    # initialize belief
+    ns = length(collect(domain(part_obs_space(pomdp))))
+    b1 = DiscreteBelief(ns) 
+    b2 = DiscreteBelief(ns) 
+    fill!(b2, 1.0/ns)
+    r = 0.0; shot = 0; obs = 0; moves = 0; ttk = 0
+    for i = 1:sim.nsteps
+        verbose ? println("State: $s1agg, $s2agg, $pos1, $pos2, Stats: $r, $shot, $obs, $moves") : nothing
+        a1 = action(p1, b1)
+        a2 = action(p2, b2)
+        # count statistics 
+        r += reward(pomdp, s1agg, a1)
+        # porbabilistic shot
+        sprob = prob(ballistic_model, pos1, pos2, xs, ys)
+        rn = rand()
+        if isVisible(map, pos1, pos2) && rn < sprob
+            shot += 1
+            ttk = i 
+            break
+        end
+        isVisible(map, pos1, target) ? (obs+=1) : (nothing)
+        a1 != 1 ? (moves+=1) : (nothing)
+        # move each entity
+        move!(pos1, pomdp, s1, a1)
+        move!(pos2, pomdp, s2, a2)
+        s1 = p2i(pomdp, pos1)
+        s2 = p2i(pomdp, pos2)
+        s1agg = aggrogate(pomdp, s1, s2) 
+        s2agg = aggrogate(pomdp, s2, s1) 
+    end
+    sim.r=r; sim.shot=shot; sim.obs=obs; sim.moves=moves; sim.ttk = ttk
+    sim
+end
 
 end # module
