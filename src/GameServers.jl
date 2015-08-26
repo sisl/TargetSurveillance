@@ -213,14 +213,13 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     mi = p2i(pomdp, mp)
                     a = action(policy, b, mi)
                     update_belief!(b, pomdp, mi, a, si)
-
                     threatIndexes = threat_neighbor_indexes(res)
                     beliefValues = threat_belief_values(res)
                     valid(b) ? nothing : fill!(b, threatIndexes, beliefValues)
                     # find the new waypoint
                     move!(p, pomdp, mi, a)
-                    p -= res.shift # for maps that are shifted
-                    waypoint = "$(p[1]/pomdp.x_size) $(p[2]/pomdp.y_size)\n"
+                    tp = p - res.shift # for maps that are shifted
+                    waypoint = "$(tp[1]/pomdp.x_size) $(tp[2]/pomdp.y_size)\n"
                     write(conn, waypoint)
                  #   println("Positions: \nResource: $mp \nThreat: $sp")
                     println("Waypoint: $waypoint")
