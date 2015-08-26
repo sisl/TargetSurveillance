@@ -3,7 +3,8 @@ module UrbanMaps
 export 
     UrbanMap,
     locals,
-    inbounds
+    inbounds,
+    shift!
 
 
 using Colladas # probably don't need this
@@ -110,6 +111,19 @@ type UrbanMap <: Map
         return self
     end
 
+end
+
+
+function Base.shift!(map::UrbanMap, xshift::Float64, yshift::Float64)
+    for i = 1:map.nBuildings
+        b = map.buildings[i].points
+        (npts, ndim) = size(b)
+        for j = 1:npts
+            b[j,1] += xshift
+            b[j,2] += yshift
+        end
+    end
+    map
 end
 
 # shift map down and left for symmetry
