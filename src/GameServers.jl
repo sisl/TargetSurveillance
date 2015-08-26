@@ -190,8 +190,8 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     end
                     waypoint = "$(mp[1]/pomdp.x_size) $(mp[2]/pomdp.y_size)\n"
                     write(conn, waypoint)
-               #     println("Initial Positions: \nResource: $mp \nThreat: $sp")
-               #     println("Initial Belief: $(b.b)")
+                    #println("Initial Positions: \nResource: $mp \nThreat: $sp")
+                    #println("Initial Belief: $(b.b)")
 
                 # update belief and send way point info
                 elseif line == protocol[:next]
@@ -222,8 +222,8 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     waypoint = "$(tp[1]/pomdp.x_size) $(tp[2]/pomdp.y_size)\n"
                     write(conn, waypoint)
                  #   println("Positions: \nResource: $mp \nThreat: $sp")
-                    println("Waypoint: $waypoint")
-                  #  println("Belief: $(b.b)")
+                    #println("Waypoint: $waypoint")
+                    #println("Belief: $(b.b)")
                     toc()
 
                 # end game
