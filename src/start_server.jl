@@ -35,7 +35,7 @@ ys = msize
 mfile = convert(ASCIIString, mfile)
 @assert isfile(mfile) "Invalid map file"
 coll = ColladaObjects(mfile);
-map = UrbanMap(coll, xs, ys);
+map = UrbanMap(coll, xs, ys, shift=true, shift_val=0.5);
 
 pfile = "$(xs)x$(ys)-mu-$mu-level-$k-ballistics.nested"
 pfile = convert(ASCIIString, joinpath(ppath, pfile))
