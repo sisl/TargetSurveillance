@@ -16,8 +16,12 @@ function PyPlot.plot(map::UrbanMap)
         new_points = zeros(n_p+1, n_d) 
         new_points[1:n_p,:] = pts
         new_points[end,:] = pts[1,:]
-        plot(new_points[:,1], new_points[:,2] ,"black",lw=2.0)
+        plot(new_points[:,1], new_points[:,2], "black",lw=2.0)
+        fill(new_points[:,1], new_points[:,2], fill=false, hatch="\\\\\\")
     end
+    xlim([0, map.xSize])
+    ylim([0, map.ySize])
 end
+
 
 end # module
