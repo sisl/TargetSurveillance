@@ -40,14 +40,12 @@ function action(policy::RandomPolicy, s::Int64)
 end
 
 # returns a valid random action
-function action(policy::RandomPolicy, s::Int64, b::Belief)
+function action(policy::RandomPolicy, b::Belief, sx::Int64)
+    # sx is own fully obs state
     pomdp = policy.pomdp
-    xy = pomdp.temp_position
     n = n_actions(pomdp)
-    i2xy!(xy, pomdp, s)
-    p = xy[1]
     a = rand(1:n)
-    while !valid_action(pomdp, p, a)
+    while !valid_action(pomdp, sx, a)
         a = rand(1:n)
     end
     return a
