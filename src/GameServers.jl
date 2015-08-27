@@ -64,13 +64,14 @@ type ClientResults
     threat_neighbor_idxs::Vector{Int64}
     belief_values::Vector{Float64}
     shift::Float64
+    a::Int64 # for belief updating
 end
 function ClientResults(;flag::String="split", shift::Float64=0.0)
     rounders = [[0.0, 0.0] [-0.5, -0.5] [0.5, -0.5] [-0.5, 0.5] [0.5, 0.5]]
     np = [-1,-1]
     n1 = zeros(Int64,5)
     n2 = zeros(Float64,5)
-    return ClientResults(flag,rounders,"","","",[1,1],[1,1],[1.,1.],[1.,1.],np,n1,n2,shift)
+    return ClientResults(flag,rounders,"","","",[1,1],[1,1],[1.,1.],[1.,1.],np,n1,n2,shift,1)
 end
 raw_string(r::ClientResults) = r.s
 pos(r::ClientResults) = r.posf
@@ -190,6 +191,8 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     end
                     waypoint = "$(mp[1]/pomdp.x_size) $(mp[2]/pomdp.y_size)\n"
                     write(conn, waypoint)
+                    # fill initials
+                    res.a = 1
                     #println("Initial Positions: \nResource: $mp \nThreat: $sp")
                     #println("Initial Belief: $(b.b)")
 
@@ -211,8 +214,10 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     end
                     # find optimal action and updated belief
                     mi = p2i(pomdp, mp)
+                    update_belief!(b, pomdp, mi, res.a, si)
                     a = action(policy, b, mi)
-                    update_belief!(b, pomdp, mi, a, si)
+                    res.a = deepcopy(a)
+                    #update_belief!(b, pomdp, mi, a, si)
                     threatIndexes = threat_neighbor_indexes(res)
                     beliefValues = threat_belief_values(res)
                     valid(b) ? nothing : fill!(b, threatIndexes, beliefValues)
@@ -221,9 +226,9 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     tp = p - res.shift # for maps that are shifted
                     waypoint = "$(tp[1]/pomdp.x_size) $(tp[2]/pomdp.y_size)\n"
                     write(conn, waypoint)
-                 #   println("Positions: \nResource: $mp \nThreat: $sp")
-                    #println("Waypoint: $waypoint")
-                    #println("Belief: $(b.b)")
+                    println("Positions: \nResource: $mp \nThreat: $sp")
+                    println("Waypoint: $waypoint")
+                    println("Belief: $(b.b)")
                     toc()
 
                 # end game
