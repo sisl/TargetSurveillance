@@ -51,12 +51,19 @@ type TwoPOMDPSim <: TwoAgentSim
     moves::Int64 # total number of moves
     prf::Vector{Int64} # position where the resource was killed
     psf::Vector{Int64} # position where the sniper was when killed
+    n_part_obs_states::Int64
 end
 function TwoPOMDPSim(s1::Int64, s2::Int64, b1::Belief, b2::Belief, n::Int64)
     return TwoPOMDPSim(n, s1, s2, b1, b2, 0.0, 0.0, 0, 0, 0, [-1,-1], [-1,-1])
 end
-function TwoPOMDPSim(s1::Int64, s2::Int64, n::Int64)
-
+function TwoPOMDPSim(s1::Int64, s2::Int64, posize::Int64, n::Int64)
+    b1 = DiscreteBelief(posize)
+    b2 = DiscreteBelief(posize)
+    # belief uniform for adversary and initially known for own
+    fill!(b1, 0.0)
+    b1[s2] = 1.0
+    fill!(b2, 1/posize)
+    return TwoPOMDPSim(n, s1, s2, b1, b2, 0.0, 0.0, 0, 0, 0, [-1,-1], [-1,-1], posize)
 end
 
 # MDP vs POMDP policy
@@ -64,7 +71,7 @@ type TwoMixedSim <: TwoAgentSim
 
 end
 
-stats(sim::TwoAgentSim) = (sim.r, sim.shot, sim.obs, sim.moves, sim.tt)
+stats(sim::TwoAgentSim) = (sim.r, sim.shot, sim.obs, sim.moves, sim.ttk)
 full_stats(sim::TwoAgentSim) = (sim.r, sim.shot, sim.obs, sim.moves, sim.ttk, sim.prf, sim.psf)
 
 function reset!(sim::TwoMDPSim, s1::Int64, s2::Int64)
@@ -75,18 +82,13 @@ function reset!(sim::TwoMDPSim, s1::Int64, s2::Int64)
     sim
 end
 
-function reset!(sim::TwoPOMDPSim, s1::Int64, s2::Int64, b1::Belief, b2::Belief)
-    sim.s1 = s1
-    sim.s2 = s2
-    sim.b1 = b1
-    sim.b2 = b2
-    sim.r = 0.0
-    sim.shot = sim.obs = sim.moves = sim.ttk = 0
-    sim
-end
 function reset!(sim::TwoPOMDPSim, s1::Int64, s2::Int64)
     sim.s1 = s1
     sim.s2 = s2
+    ns = sim.n_part_obs_states
+    fill!(sim.b2, 1/ns)
+    fill!(sim.b1, 0.0)
+    sim.b1[s2] = 1.0
     sim.r = 0.0
     sim.shot = sim.obs = sim.moves = sim.ttk = 0
     sim
@@ -171,25 +173,31 @@ function simulate!(sim::TwoPOMDPSim,
     i2p!(pos1, pomdp, s1)
     i2p!(pos2, pomdp, s2)
     # initialize belief
-    ns = length(collect(domain(part_obs_space(pomdp))))
-    b1 = DiscreteBelief(ns) 
-    b2 = DiscreteBelief(ns) 
-    fill!(b2, 1.0/ns)
+    b1 = sim.b1 
+    b2 = sim.b2 
+
     r = 0.0; shot = 0; obs = 0; moves = 0; ttk = 0
+
     for i = 1:sim.nsteps
         verbose ? println("State: $s1agg, $s2agg, $pos1, $pos2, Stats: $r, $shot, $obs, $moves") : nothing
+        verbose ? println("Belief 1: $b1") : nothing
+        verbose ? println("Belief 2: $b2") : nothing
         a1 = action(p1, b1)
         a2 = action(p2, b2)
         # count statistics 
-        r += reward(pomdp, s1agg, a1)
-        # porbabilistic shot
+        currentr = reward(pomdp, s1agg, a1)
+        ttk = i
         sprob = prob(ballistic_model, pos1, pos2, xs, ys)
         rn = rand()
         if isVisible(map, pos1, pos2) && rn < sprob
             shot += 1
-            ttk = i 
+            r += currentr
+            copy!(sim.prf, pos1)
+            copy!(sim.psf, pos2)
             break
         end
+        # only add sniper reward if shot
+        currentr > -0.1 ? (r+=currentr) : (nothing)
         isVisible(map, pos1, target) ? (obs+=1) : (nothing)
         a1 != 1 ? (moves+=1) : (nothing)
         # move each entity
@@ -198,10 +206,12 @@ function simulate!(sim::TwoPOMDPSim,
         s1 = p2i(pomdp, pos1)
         s2 = p2i(pomdp, pos2)
         s1agg = aggrogate(pomdp, s1, s2) 
-        s2agg = aggrogate(pomdp, s2, s1) 
+        s2agg = aggrogate(pomdp, s2, s1)
     end
     sim.r=r; sim.shot=shot; sim.obs=obs; sim.moves=moves; sim.ttk = ttk
     sim
+
+
 end
 
 end # module
