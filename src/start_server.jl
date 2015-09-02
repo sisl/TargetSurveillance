@@ -24,6 +24,7 @@ kp = int(ARGS[8]) # POMDP policy k
 ##################### EXAMPLE SCRIPT ############################
 #################################################################
 # julia start_server.jl 4444 ../data/maps/square_map_2D_new.dae ../data/policies/square_map resource 10 0.3 2 0 
+# julia start_server.jl 4444 ../data/maps/square_map_2D_new.dae ../data/policies/square_map resource 10 0.3 2 0 
 
 ai = 0
 agent == "resource" ? (ai = 1) : (ai = 2)
@@ -42,7 +43,7 @@ pfile = convert(ASCIIString, joinpath(ppath, pfile))
 
 @assert isfile(pfile) "Invalid MDP policy file"
 mdp_policy = NestedPolicy(pfile)
-p = get_policy(mdp_policy, kp, ai).policy
+p = get_policy(mdp_policy, kp-1, ai).policy
 pomdp = SniperPOMDP(map, adversary_policy=p, adversary_prob=mu, lvlk=true, agent=:resource)
 
 ppfile = "nested-$agent-$(xs)x$(ys)-mu-$(mu)-level-$(kp).policy"
@@ -52,6 +53,7 @@ ppfile = joinpath(ppath, ppfile)
 policy = PolicyFile(ppfile, :momdp)
 
 # This needs to be zero if map is not square
-shift = 0.5/xs
+#shift = 0.5/xs
+shift = 0.0
 server = SniperServer(sn, shift=shift)
 start(server, pomdp, policy)

@@ -11,6 +11,7 @@ export
     index, 
     fully_obs_space,
     part_obs_space,
+    states,
     actions,
     actions!,
     observations,
@@ -21,8 +22,10 @@ export
     domain,
     reward,
     transition!,
+    transition,
     observation!,
     discount,
+    rand,
     # misc
     move,
     move!,
@@ -37,7 +40,12 @@ export
     valid_action,
     isVisible,
     get_visibles,
-    get_ballistics
+    get_ballistics,
+    # space
+    VarSpace,
+    ActionSpace,
+    ObservationSpace
+
 
 using MOMDPs
 using POMDPToolbox
@@ -259,6 +267,12 @@ function transition!(d::TransitionDistribution, pomdp::SniperPOMDP, s::Int64, a:
     end
     d
 end
+#function transition(pomdp::SniperPOMDP, s::Int64, a::Int64; d=create_transition_distribution(pomdp))
+#    transition!(d, pomdp, s, a)
+#end
+function transition(pomdp::SniperPOMDP, s::Int64, a::Int64, d=create_transition_distribution(pomdp))
+    transition!(d, pomdp, s, a)
+end
 
 function transition!(d::FODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, a::Int64)
     interps = d.interps
@@ -454,6 +468,10 @@ function observation!(d::ObsDistribution, pomdp::SniperPOMDP, x::Int64, y::Int64
     d
 end
 
+
+function Base.rand(d::ObsDistribution)
+    return d.interps.indices[1]
+end
 
 function reward(pomdp::SniperPOMDP, s::Int64, a::Int64)
     xy = pomdp.temp_position

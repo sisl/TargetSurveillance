@@ -43,6 +43,7 @@ function SniperServer(socket::Int64; delay::Int64=0, protocol=Dict(), shift::Flo
         protocol[:start_game] = "start"
         protocol[:end_game] = "end"
         protocol[:kill] = "kill"
+        protocol[:initial] = "initial"
     end
 
     return SniperServer(socket, delay, protocol, shift)
@@ -170,6 +171,8 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                 line = strip(line)
            #     println("From Client: ", line)
 
+                #if line == protocol[:initiall
+
                 # begin the game
                 if line == protocol[:start_game]
                     println("Starting the game")
@@ -193,8 +196,8 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     write(conn, waypoint)
                     # fill initials
                     res.a = 1
-                    #println("Initial Positions: \nResource: $mp \nThreat: $sp")
-                    #println("Initial Belief: $(b.b)")
+                    println("Initial Positions: \nResource: $mp \nThreat: $sp")
+                    println("Initial Belief: $(b.b)")
 
                 # update belief and send way point info
                 elseif line == protocol[:next]
@@ -226,6 +229,7 @@ function start(sserver::SniperServer, pomdp::POMDP, policy::Policy)
                     tp = p - res.shift # for maps that are shifted
                     waypoint = "$(tp[1]/pomdp.x_size) $(tp[2]/pomdp.y_size)\n"
                     write(conn, waypoint)
+                    println("Recieved: $line")
                     println("Positions: \nResource: $mp \nThreat: $sp")
                     println("Waypoint: $waypoint")
                     println("Belief: $(b.b)")

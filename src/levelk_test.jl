@@ -10,6 +10,7 @@ using GameServers
 
 
 coll = ColladaObjects("../data/maps/demo_map_border2D.dae");
+coll = ColladaObjects("../data/maps/square_map2D.dae");
 map = UrbanMap(coll, 20, 20);
 pomdp = SniperPOMDP(map)
 
