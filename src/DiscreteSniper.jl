@@ -118,11 +118,11 @@ type SniperPOMDP <: MOMDP
     # pre-allocated for memory efficiency
 
     function SniperPOMDP(map::Map; nSnipers::Int64 = 1, nMonitors::Int64 = 1,
-                       target = (0.2,0.8), # in normalized cooridnates
+                       target = (0.5,0.5), # in normalized cooridnates
                        target_reward = 0.1, sniper_reward = -1.0, move_reward = -0.01,
                        agent::Symbol = :resource, lvlk::Bool=false, 
                        adversary_policy::Vector{Int64}=zeros(Int64,0),
-                       adversary_prob::Float64=0.5,
+                       adversary_prob::Float64=0.3,
                        discount_factor::Float64=0.95,
                        ballistic_model::BallisticModel=SimplePoly(LINEAR_BALLISTICS),
                        obs_model::BallisticModel=Constant())
@@ -286,7 +286,7 @@ function transition!(d::FODistribution, pomdp::SniperPOMDP, x::Int64, y::Int64, 
         move!(temp, pomdp, x, a)
         xp = p2i(pomdp, temp)
         # if bump into a building or go out, return to same state
-        if in(xp, invalids) || !inbounds(pomdp.map, temp)
+        if in(xp, invalids) || !inbounds(pomdp.map, temp) || !isVisible(pomdp, x, xp)
             interps.indices[1] = x
         else
             interps.indices[1] = xp
@@ -321,7 +321,7 @@ function stochastic_transition!(d::PODistribution, pomdp::SniperPOMDP, x::Int64,
             move!(temp, pomdp, y, i)
             yp = p2i(pomdp, temp)
             interps.indices[i] = yp
-            if in(yp, pomdp.invalid_positions) || !inbounds(pomdp.map, temp)
+            if in(yp, pomdp.invalid_positions) || !inbounds(pomdp.map, temp) || !isVisible(pomdp, y, yp)
                 interps.weights[i] = 0.0
                 interps.indices[i] = y
                 inside -= 1
