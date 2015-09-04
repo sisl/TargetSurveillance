@@ -35,6 +35,10 @@ type ColladaObjects <: Collada
 
     normalizedObjects::Vector{MapObject} # positions are normalized
 
+    norm::Float64
+    offx::Float64
+    offy::Float64
+
     nObjects::Int
 
     function ColladaObjects(fileName::ASCIIString)
@@ -43,14 +47,16 @@ type ColladaObjects <: Collada
         self.xdoc = parse_file(fileName)
         self.xroot = root(self.xdoc)
         self.objects = getObjectData(self.xroot)
-        self.normalizedObjects = normalizeObjects(self.objects)
+        (nobj, no, ox, oy) = normalizeObjects(self.objects)
+        self.normalizedObjects = nobj
+        self.norm = no
+        self.offx = ox
+        self.offy = oy
         self.nObjects = length(self.normalizedObjects)
         return self
     end
 
 end
-
-
 
 function getObjectData(xroot::XMLElement)
     ces = get_elements_by_tagname(xroot, "library_geometries")
@@ -72,14 +78,17 @@ function normalizeObjects(objects::Vector)
     # assume square map for simplicty
     # can incorporate x and y norms later
     normConstant = 0.0
+    offx = 0.0; offy = 0.0
     zMin = Inf
     borderIdx = 0
     # assume map border is at -z plane
     for i = 1:nObjects
-        currentMin = minimum(objects[i].points)
+        currentMin = minimum(objects[i].points[:,3])
         if currentMin < zMin
             zMin = currentMin
-            normConstant = maximum(objects[i].points)
+            normConstant = maximum(objects[i].points[:,1]) - minimum(objects[i].points[:,1])
+            offx = minimum(objects[i].points[:,1])
+            offy = minimum(objects[i].points[:,2])
             borderIdx = i
         end
     end
@@ -87,13 +96,17 @@ function normalizeObjects(objects::Vector)
     objCount = 1
     for i = 1:nObjects
         if i != borderIdx
+            newPoints = zeros(size(objects[i].points))
             newVerts = deepcopy(objects[i].vertices)
-            newPoints = objects[i].points / normConstant
+            newPoints[:,1] = (objects[i].points[:,1] - offx) / normConstant
+            newPoints[:,2] = (objects[i].points[:,2] - offy) / normConstant
+            newPoints[:,3] = objects[i].points[:,3]
+            #newPoints = objects[i].points / normConstant
             normObjects[objCount] = MapObject(newPoints, newVerts)
             objCount += 1
         end
     end
-    return normObjects
+    return (normObjects, normConstant, offx, offy)
 end
 
 

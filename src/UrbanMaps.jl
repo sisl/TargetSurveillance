@@ -27,7 +27,7 @@ type UrbanMap <: Map
 
     # TODO: need to deal with normalizing the building vertices for diff x,y sizes
     function UrbanMap(coll::Collada, xSize::Int64, ySize::Int64; 
-                      shift::Bool=true, shift_val::Float64=1.0)
+                      shift::Bool=true, shift_val::Float64=0.0)
         self = new()
 
         nBuildings = coll.nObjects
