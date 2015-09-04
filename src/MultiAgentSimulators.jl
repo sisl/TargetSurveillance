@@ -98,6 +98,8 @@ function reset!(sim::TwoMDPSim, s1::Int64, s2::Int64)
     sim.s2 = s2
     sim.r = 0.0
     sim.shot = sim.obs = sim.moves = sim.ttk = 0
+    fill!(sim.prf, -1)
+    fill!(sim.psf, -1)
     sim
 end
 
@@ -110,6 +112,8 @@ function reset!(sim::TwoPOMDPSim, s1::Int64, s2::Int64)
     sim.b1[s2] = 1.0
     sim.r = 0.0
     sim.shot = sim.obs = sim.moves = sim.ttk = 0
+    fill!(sim.prf, -1)
+    fill!(sim.psf, -1)
     sim
 end
 
