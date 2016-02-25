@@ -52,16 +52,16 @@ function plot_bins(map::UrbanMap)
     end
 end
 
-function plot_target(pomdp::SniperPOMDP)
+function plot_target(pomdp::SniperPOMDP; ms::Float64=15.0)
     t = pomdp.target
     xt = t[1]; yt = t[2]
-    plot(xt, yt, "*", color="k", markersize=12.5, label="Target")
+    plot(xt, yt, "*", color="k", markersize=ms, label="Target")
 end
-function plot_resource(x::Float64, y::Float64)
-    plot(x, y, "v", color="k", markersize=12.5, label="Agent (Blue Team)")
+function plot_resource(x::Float64, y::Float64; ms::Float64=15.0)
+    plot(x, y, "v", color="k", markersize=ms, label="Agent")
 end
-function plot_threat(x::Float64, y::Float64)
-    plot(x, y, "^", color="k", markersize=12.5, label="Threat (Red Team)")
+function plot_threat(x::Float64, y::Float64; ms::Float64=15.0)
+    plot(x, y, "^", color="k", markersize=ms, label="Threat")
 end
 
 function plot_belief(pomdp::SniperPOMDP, b::Belief)

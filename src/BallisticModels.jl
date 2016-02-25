@@ -32,7 +32,7 @@ end
 prob(m::Constant, p1::Vector{Int64}, p2::Vector{Int64}, xs::Int64, ys::Int64) = 1.0
 prob(m::Constant, p1::Vector{Float64}, p2::Vector{Float64}) = 1.0
 
-
+# TODO: xs and ys should go in the BallisticModel type
 # evaluate the hit probability for 2D discrete input
 function prob(m::SimplePoly, p1::Vector{Int64}, p2::Vector{Int64}, xs::Int64, ys::Int64)
     p1t = m.p1t

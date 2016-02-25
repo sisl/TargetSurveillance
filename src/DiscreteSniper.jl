@@ -124,7 +124,7 @@ type SniperPOMDP <: MOMDP
                        adversary_policy::Vector{Int64}=zeros(Int64,0),
                        adversary_prob::Float64=0.3,
                        discount_factor::Float64=0.95,
-                       ballistic_model::BallisticModel=SimplePoly(LINEAR_BALLISTICS),
+                       ballistic_model::BallisticModel=SimplePoly(FOURTH_ORDER_BALLISTICS),
                        obs_model::BallisticModel=Constant())
         @assert agent == :resource || agent == :sniper "Invalid agent type"
 
@@ -189,8 +189,8 @@ function create_state(pomdp::SniperPOMDP)
     s1 = rand(1:pomdp.grid_size)
     s2 = rand(1:pomdp.grid_size)
     i2p!(p1, pomdp, s1); i2p!(p2, pomdp, s2)
-    #while isVisible(pomdp.map, p1, p2) || isVisible(pomdp.map, p1, pomdp.target) || in(s1, invalids) || in(s2, invalids) 
-    while isVisible(pomdp.map, p1, p2) || in(s1, invalids) || in(s2, invalids) 
+    while isVisible(pomdp.map, p1, p2) || isVisible(pomdp.map, p1, pomdp.target) || in(s1, invalids) || in(s2, invalids) 
+    #while isVisible(pomdp.map, p1, p2) || in(s1, invalids) || in(s2, invalids) 
         s1 = rand(1:pomdp.grid_size)
         s2 = rand(1:pomdp.grid_size)
         i2p!(p1, pomdp, s1); i2p!(p2, pomdp, s2)

@@ -19,6 +19,7 @@ mu = float(ARGS[6]) # stochasticity constant
 k = int(ARGS[7]) # nested policy k
 kp = int(ARGS[8]) # POMDP policy k
 
+mup = 0.5
 
 #################################################################
 ##################### EXAMPLE SCRIPT ############################
@@ -36,7 +37,8 @@ ys = msize
 mfile = convert(ASCIIString, mfile)
 @assert isfile(mfile) "Invalid map file"
 coll = ColladaObjects(mfile);
-map = UrbanMap(coll, xs, ys, shift=true, shift_val=0.5);
+#map = UrbanMap(coll, xs, ys, shift=true, shift_val=0.5);
+map = UrbanMap(coll, xs, ys);
 
 pfile = "$(xs)x$(ys)-mu-$mu-level-$k-ballistics.nested"
 pfile = convert(ASCIIString, joinpath(ppath, pfile))
@@ -44,12 +46,13 @@ pfile = convert(ASCIIString, joinpath(ppath, pfile))
 @assert isfile(pfile) "Invalid MDP policy file"
 mdp_policy = NestedPolicy(pfile)
 p = get_policy(mdp_policy, kp-1, ai).policy
-pomdp = SniperPOMDP(map, adversary_policy=p, adversary_prob=mu, lvlk=true, agent=:resource)
+pomdp = SniperPOMDP(map, adversary_policy=p, adversary_prob=mup, lvlk=true, agent=:resource)
 
 ppfile = "nested-$agent-$(xs)x$(ys)-mu-$(mu)-level-$(kp).policy"
 ppfile = joinpath(ppath, ppfile) 
 
 @assert isfile(ppfile) "Invalid POMDP policy file"
+println("Loading: $ppfile")
 policy = PolicyFile(ppfile, :momdp)
 
 # This needs to be zero if map is not square
